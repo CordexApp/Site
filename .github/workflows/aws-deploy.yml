@@ -12,6 +12,7 @@ env:
   ECS_SERVICE: cordex-site-service
   ECS_TASK_DEFINITION: task-definition.json
   CONTAINER_NAME: site-container
+  CLOUDWATCH_LOG_GROUP: /ecs/cordex-site-task
 
 jobs:
   deploy:
@@ -30,6 +31,11 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::471112508717:role/GitHubActionsECR-ECS
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure CloudWatch log group exists
+        run: |
+          aws logs describe-log-groups --log-group-name-prefix ${{ env.CLOUDWATCH_LOG_GROUP }} --region ${{ env.AWS_REGION }} || \
+          aws logs create-log-group --log-group-name ${{ env.CLOUDWATCH_LOG_GROUP }} --region ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
