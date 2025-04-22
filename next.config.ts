@@ -4,17 +4,6 @@ const nextConfig: NextConfig = {
   /* config options here */
   output: "standalone",
   serverExternalPackages: ["sharp"],
-  experimental: {},
-  // Avoid DNS resolution issues in containers
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.watchOptions = {
-        ...config.watchOptions,
-        poll: 500,
-      };
-    }
-    return config;
-  },
 };
 
 export default nextConfig;
