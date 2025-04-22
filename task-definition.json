@@ -14,6 +14,20 @@
           "protocol": "tcp"
         }
       ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "PORT",
+          "value": "3000"
+        },
+        {
+          "name": "HOSTNAME",
+          "value": "0.0.0.0"
+        }
+      ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {

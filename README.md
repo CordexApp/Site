@@ -1,5 +1,48 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+# Cordex Site
+
+## Tech Stack
+
+- **Frontend Framework**: Next.js 15.3.0
+- **Language**: TypeScript
+- **Styling**: TailwindCSS
+- **Containerization**: Docker
+- **Deployment**: AWS ECS (Elastic Container Service) with Fargate
+- **CI/CD**: GitHub Actions
+
+## Deployment Architecture
+
+The application is deployed on AWS using a modern container-based architecture:
+
+- **Container Registry**: Amazon ECR stores Docker images
+- **Compute**: AWS ECS Fargate runs containers without managing servers
+- **Networking**: Application Load Balancer routes traffic to containers
+- **Logging**: CloudWatch collects application logs
+
+## Continuous Integration & Deployment
+
+This project uses GitHub Actions for automated deployment:
+
+```mermaid
+graph LR
+    A[Code Push] --> B[GitHub Actions]
+    B --> C[Build Docker Image]
+    C --> D[Push to ECR]
+    D --> E[Deploy to ECS]
+    E --> F[Update Load Balancer]
+```
+
+The workflow automatically:
+
+1. Builds a Docker image of the application
+2. Pushes it to Amazon ECR
+3. Updates the ECS task definition with the new image
+4. Deploys the updated service
+5. Waits for the deployment to stabilize
+
+Security is managed through GitHub OIDC, eliminating the need for storing AWS credentials in GitHub.
+
 ## Getting Started
 
 First, run the development server:
@@ -28,9 +71,3 @@ To learn more about Next.js, take a look at the following resources:
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
