@@ -4,7 +4,7 @@ set -e
 # Set your AWS region and GitHub repository details
 AWS_REGION="us-west-2"
 ACCOUNT_ID="471112508717"
-GITHUB_REPO="YOUR-GITHUB-USERNAME/YOUR-REPO-NAME"  # Replace with your actual GitHub repo path
+GITHUB_REPO="CordexApp/Site"
 
 # Create the OIDC provider for GitHub Actions
 echo "Creating OIDC provider for GitHub Actions..."
