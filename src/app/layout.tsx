@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Source_Code_Pro } from "next/font/google";
 import "./globals.css";
+import NavigationBar from "@/components/NavigationBar";
 
-const inter = Inter({
-  variable: "--font-inter",
+const sourceCodePro = Source_Code_Pro({
+  variable: "--font-source-code-pro",
   subsets: ["latin"],
 });
 
@@ -19,7 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+      <body className={`${sourceCodePro.variable} antialiased`}>
+        <NavigationBar />
+        {children}
+      </body>
     </html>
   );
 }
