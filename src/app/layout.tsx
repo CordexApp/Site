@@ -1,7 +1,8 @@
+import NavigationBar from "@/components/NavigationBar";
 import type { Metadata } from "next";
 import { Source_Code_Pro } from "next/font/google";
 import "./globals.css";
-import NavigationBar from "@/components/NavigationBar";
+import { Providers } from "./providers";
 
 const sourceCodePro = Source_Code_Pro({
   variable: "--font-source-code-pro",
@@ -21,8 +22,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${sourceCodePro.variable} antialiased`}>
-        <NavigationBar />
-        {children}
+        <Providers>
+          <NavigationBar />
+          <main>{children}</main>
+        </Providers>
       </body>
     </html>
   );

@@ -1,4 +1,3 @@
-import NextLink from "next/link";
 import { SecondaryButton } from "@/ui/SecondaryButton";
 
 export default function Home() {
