@@ -10,14 +10,9 @@ export function ServiceCard({ service }: ServiceCardProps) {
   return (
     <Link
       href={`/service/${service.id}`}
-      className="flex flex-row items-center justify-between p-4 bg-gray-900 rounded-md hover:bg-gray-800 transition-colors border border-gray-800"
+      className="flex flex-row items-center justify-start gap-4 p-4 border-1 border-white"
     >
-      <div className="flex flex-col">
-        <h3 className="text-lg font-semibold mb-1">{service.name}</h3>
-        <p className="text-sm text-gray-400 mb-2">{service.endpoint}</p>
-      </div>
-
-      <div className="w-16 h-16 relative rounded-md overflow-hidden">
+      <div className="w-24 h-24 relative overflow-hidden">
         {service.image ? (
           <Image
             src={service.image}
@@ -30,6 +25,11 @@ export function ServiceCard({ service }: ServiceCardProps) {
             No img
           </div>
         )}
+      </div>
+
+      <div className="flex flex-col">
+        <h3 className="text-lg font-semibold mb-1">{service.name}</h3>
+        <p className="text-sm text-gray-400 mb-2">{service.endpoint}</p>
       </div>
     </Link>
   );
