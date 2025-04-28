@@ -1,17 +1,19 @@
 "use client";
 
-import { FormEvent, useEffect, useState, useRef } from "react";
+import { createService, getUploadPresignedUrl } from "@/api/services";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { parseEther } from "viem";
 import {
   useTransaction,
-  useWriteContract,
   useWaitForTransactionReceipt,
+  useWriteContract,
 } from "wagmi";
-import { createService, getUploadPresignedUrl } from "@/api/services";
 
 export default function LaunchService() {
   console.log("LaunchService component rendering");
 
+  const router = useRouter();
   const [serviceName, setServiceName] = useState("");
   const [apiEndpoint, setApiEndpoint] = useState("");
   const [maxEscrow, setMaxEscrow] = useState("");
@@ -27,11 +29,12 @@ export default function LaunchService() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [providerTokenAddress, setProviderTokenAddress] = useState<string | undefined>();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ContractFactory deployed address
   const contractConfig = {
-    address: "0x5d6beb7d2cdc41ab6adce15c582cba64d32dee00" as `0x${string}`,
+    address: "0xca38c4d7889d7337ceea5c53db82f70f12a7b9e7" as `0x${string}`,
     abi: [
       {
         inputs: [
@@ -41,6 +44,18 @@ export default function LaunchService() {
           { name: "tokenSymbol", type: "string" },
         ],
         name: "deployProviderContract",
+        outputs: [{ name: "", type: "address" }],
+        stateMutability: "nonpayable",
+        type: "function",
+      },
+      {
+        inputs: [
+          { name: "providerTokenAddress", type: "address" },
+          { name: "initialTokenAmount", type: "uint256" },
+          { name: "slope", type: "uint256" },
+          { name: "intercept", type: "uint256" },
+        ],
+        name: "deployBondingCurveContract",
         outputs: [{ name: "", type: "address" }],
         stateMutability: "nonpayable",
         type: "function",
@@ -61,6 +76,13 @@ export default function LaunchService() {
       },
       {
         inputs: [{ name: "provider", type: "address" }],
+        name: "getBondingCurveContract",
+        outputs: [{ name: "", type: "address" }],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        inputs: [{ name: "provider", type: "address" }],
         name: "getProviderContracts",
         outputs: [{ name: "", type: "address[]" }],
         stateMutability: "view",
@@ -73,6 +95,34 @@ export default function LaunchService() {
         stateMutability: "view",
         type: "function",
       },
+      {
+        inputs: [{ name: "provider", type: "address" }],
+        name: "getBondingCurveContracts",
+        outputs: [{ name: "", type: "address[]" }],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        inputs: [],
+        name: "FIXED_TOKEN_ADDRESS",
+        outputs: [{ name: "", type: "address" }],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        inputs: [],
+        name: "providerImplementation",
+        outputs: [{ name: "", type: "address" }],
+        stateMutability: "view",
+        type: "function",
+      },
+      {
+        inputs: [],
+        name: "bondingCurveImplementation",
+        outputs: [{ name: "", type: "address" }],
+        stateMutability: "view",
+        type: "function",
+      }
     ] as const,
   };
 
@@ -140,69 +190,98 @@ export default function LaunchService() {
           if (receipt.status === "success") {
             console.log("Transaction confirmed successful");
 
-            // Extract contract address from logs if available
+            // Extract contract address and provider token address from logs
             let contractAddress: string | undefined;
+            let extractedProviderTokenAddress: string | undefined;
 
-            if (receipt.logs && receipt.logs.length > 0) {
-              // In deployment transactions, the contract address is often found in the logs
-              // We'll log all addresses from logs to help with debugging
-              console.log("Transaction logs:", receipt.logs);
+            // Simplified log parsing - assuming ProviderContractDeployed event structure
+            // You might need to adjust this based on the actual event signature and topics
+            const providerContractDeployedTopic = '0x...'; // Replace with actual event topic hash
+            const providerTokenTopicIndex = 2; // Assuming token address is the 2nd indexed topic
 
-              // Try different approaches to find the contract address
-              for (const log of receipt.logs) {
-                console.log("Log address:", log.address);
-                if (log.address && log.address !== contractConfig.address) {
-                  // If this address is different from the factory contract, it might be our new contract
-                  contractAddress = log.address;
-                  console.log(
-                    "Potential contract address found:",
-                    contractAddress
-                  );
-                  break;
-                }
+            for (const log of receipt.logs) {
+              // Example: Check if the log is from the factory and matches the event signature
+              // This is a placeholder - replace with actual event identification logic
+              if (log.address.toLowerCase() === contractConfig.address.toLowerCase() /* && log.topics[0] === providerContractDeployedTopic */ ) {
+                 console.log("Found potential deployment event log:", log);
+                 // Assuming contract address is often the 'to' address or derived differently
+                 // contractAddress = log.address; // This might not be correct, depends on factory pattern
+
+                 // Attempt to decode or identify the token address from topics/data
+                 // Example: providerTokenAddress = web3.eth.abi.decodeParameter('address', log.topics[providerTokenTopicIndex]);
+                 // This needs a robust way to find the correct log and decode it.
+                 // For now, we'll rely on fetching it if parsing fails.
+              }
+              // Fallback or alternative: Assume token address is the address of a log NOT from the factory
+              if (log.address.toLowerCase() !== contractConfig.address.toLowerCase()) {
+                 if (!contractAddress) contractAddress = receipt.to; // Use receipt.to as potential contract address
+                 if (!extractedProviderTokenAddress) extractedProviderTokenAddress = log.address; // Potential token address
+                 console.log(`Potential contract: ${contractAddress}, Potential token: ${extractedProviderTokenAddress}`);
               }
             }
 
-            if (!contractAddress) {
-              console.warn(
-                "Could not extract contract address from logs, using transaction.to as fallback"
-              );
-              // As a fallback, we can try to use other receipt data
-              if (receipt.to && receipt.to !== contractConfig.address) {
-                contractAddress = receipt.to;
-              }
+
+            if (!contractAddress && receipt.to !== null && receipt.to.toLowerCase() !== contractConfig.address.toLowerCase()) {
+               contractAddress = receipt.to; // Explicit null check before assigning receipt.to
+               console.warn("Contract address determined from receipt.to:", contractAddress);
             }
 
-            if (contractAddress) {
-              console.log(
-                "Registering service with contract address:",
-                contractAddress
-              );
+            // If provider token wasn't found in logs, try fetching it
+            if (!extractedProviderTokenAddress && contractAddress) {
+              console.log("Provider token not found in logs, attempting fetch...");
               try {
-                // Use await here to ensure the registration completes
-                await registerService(contractAddress);
+                 const fetchedTokenAddress = await fetchProviderTokenAddress(contractAddress); // Assuming contractAddress is correct provider address
+                 if (fetchedTokenAddress && fetchedTokenAddress !== '0x0000000000000000000000000000000000000000') {
+                    extractedProviderTokenAddress = fetchedTokenAddress;
+                    console.log("Fetched Provider Token Address:", extractedProviderTokenAddress);
+                 } else {
+                    console.warn("fetchProviderTokenAddress returned zero address or undefined");
+                 }
+              } catch (fetchError) {
+                 console.error("Error fetching provider token address:", fetchError);
+              }
+            } else if (extractedProviderTokenAddress) {
+               console.log("Provider Token Address from logs:", extractedProviderTokenAddress);
+            }
+
+
+            // Register service if contract address is found
+            if (contractAddress) {
+              console.log("Registering service with contract address:", contractAddress);
+              try {
+                await registerService(contractAddress); // Make sure registerService uses the correct contract address
                 console.log("Service registration completed successfully");
               } catch (error) {
                 console.error("Error during service registration:", error);
               }
             } else {
-              console.warn("Could not determine contract address from receipt");
+              console.warn("Could not determine provider contract address from receipt. Cannot register service.");
             }
 
-            // Set status to success regardless of database registration
-            // as the blockchain part succeeded
+            // Set success state and store the determined token address
             setDeploymentStatus("success");
+            if (extractedProviderTokenAddress) {
+               setProviderTokenAddress(extractedProviderTokenAddress); // <-- Store the token address
+            } else {
+               console.error("Failed to determine Provider Token Address after deployment.");
+               // Potentially set an error state here or show a message
+            }
+
           } else {
-            console.error("Transaction reverted on blockchain");
+            // Transaction failed
+            console.error("Transaction failed with status:", receipt.status);
             setDeploymentStatus("error");
             setErrorMessage("Transaction reverted on the blockchain");
           }
-        } catch (error) {
-          console.error("Error processing transaction receipt:", error);
+        } catch (processingError) {
+          console.error("Error processing receipt:", processingError);
           setDeploymentStatus("error");
           setErrorMessage(
-            "Error processing transaction: " +
-              (error instanceof Error ? error.message : String(error))
+            `Error processing transaction receipt: ${
+              processingError instanceof Error
+                ? processingError.message
+                : String(processingError)
+            }`
           );
         }
       };
@@ -342,6 +421,18 @@ export default function LaunchService() {
       console.error("Error registering service:", error);
     }
   };
+
+  // Helper function to fetch provider token address (needs implementation)
+  // This function should ideally call the getProviderToken method of your factory contract
+  // It needs the *provider's address* (msg.sender from deployment tx), not the deployed contract address.
+  // You might need to adjust how you get the provider address (e.g., from txData.from).
+  async function fetchProviderTokenAddress(providerAddress: string): Promise<string | undefined> {
+     console.warn("fetchProviderTokenAddress needs implementation using the correct provider address:", providerAddress);
+     // Placeholder: Fetch the address using wagmi's readContract or similar
+     // const tokenAddress = await readContract({ ..., functionName: 'getProviderToken', args: [providerAddress] });
+     // return tokenAddress as string;
+     return undefined; // Return undefined until implemented
+  }
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -535,12 +626,9 @@ export default function LaunchService() {
           )}
 
           {deploymentStatus === "success" && (
-            <div className="text-green-500 mt-4 p-3 border border-green-500 space-y-2">
-              <p className="font-bold">Service successfully launched!</p>
-              <p>
-                Your service is now live on the blockchain and registered in our
-                database.
-              </p>
+            <div className="text-green-500 mt-4 p-3 border border-green-500 space-y-4">
+              <p className="font-bold">deployment successful!</p>
+              <p>Your provider contract has been deployed.</p>
               {txHash && (
                 <a
                   href={`https://sepolia-optimism.etherscan.io/tx/${txHash}`}
@@ -551,6 +639,16 @@ export default function LaunchService() {
                   view transaction
                   <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white origin-left transform scale-x-100 transition-transform group-hover:scale-x-0"></span>
                 </a>
+              )}
+              {providerTokenAddress && (
+                <button
+                  type="button"
+                  onClick={() => router.push(`/deploy-bonding-curve?tokenAddress=${providerTokenAddress}`)}
+                  className="relative text-white font-medium group px-4 py-2 mt-4 block border border-white hover:bg-white hover:text-black transition-colors"
+                >
+                  deploy bonding curve for this token
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white origin-left transform scale-x-100 transition-transform group-hover:scale-x-0"></span>
+                </button>
               )}
             </div>
           )}

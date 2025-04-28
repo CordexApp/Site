@@ -4,8 +4,11 @@ import { Link, PrimaryButton } from "@/ui";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import Image from "next/image";
 import NextLink from "next/link";
+import { useAccount } from "wagmi";
 
 export default function NavigationBar() {
+  const { isConnected } = useAccount();
+
   return (
     <header className="w-full py-4 px-4 md:px-32 flex justify-between items-center bg-black text-white font-mono">
       <div className="logo">
@@ -21,6 +24,10 @@ export default function NavigationBar() {
       </div>
       <nav className="flex items-center space-x-6">
         <Link href="/about">how it works</Link>
+        
+        {isConnected && (
+          <Link href="/my-contracts">my contracts</Link>
+        )}
 
         <ConnectButton.Custom>
           {({
