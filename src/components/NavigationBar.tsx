@@ -20,6 +20,8 @@ export default function NavigationBar() {
         </NextLink>
       </div>
       <nav className="flex items-center space-x-6">
+        <Link href="/about">how it works</Link>
+
         <ConnectButton.Custom>
           {({
             account,
@@ -35,20 +37,20 @@ export default function NavigationBar() {
             return (
               <div
                 {...(!ready && {
-                  'aria-hidden': true,
+                  "aria-hidden": true,
                   style: {
                     opacity: 0,
-                    pointerEvents: 'none',
-                    userSelect: 'none',
+                    pointerEvents: "none",
+                    userSelect: "none",
                   },
                 })}
               >
                 {(() => {
                   if (!connected) {
                     return (
-                      <button 
-                        onClick={openConnectModal} 
-                        className="px-4 py-2 border border-white text-white font-medium hover:bg-white hover:text-black transition-colors"
+                      <button
+                        onClick={openConnectModal}
+                        className="px-4 py-2 border border-white text-white font-medium hover:bg-white hover:text-black transition-colors cursor-pointer"
                       >
                         connect wallet
                       </button>
@@ -77,7 +79,6 @@ export default function NavigationBar() {
             );
           }}
         </ConnectButton.Custom>
-        <Link href="/about">how it works</Link>
         <PrimaryButton href="/launch">launch a service</PrimaryButton>
       </nav>
     </header>
