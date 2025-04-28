@@ -18,7 +18,7 @@ export default function NavigationBar() {
         </NextLink>
       </div>
       <nav className="flex items-center space-x-6">
-        <Link href="/about">About</Link>
+        <Link href="/about">how it works</Link>
         <PrimaryButton href="/launch">launch a service</PrimaryButton>
       </nav>
     </header>

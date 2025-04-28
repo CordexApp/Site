@@ -1,5 +1,5 @@
 import NextLink from "next/link";
-import { SecondaryButton } from "@/ui/SecondaryButton";
+import { PrimaryButton } from "@/ui/PrimaryButton";
 import { Grid } from "@/ui/Grid";
 import { getAllServices } from "@/api/services";
 
@@ -12,9 +12,9 @@ export default async function Home() {
       <h1 className="text-3xl font-bold mb-2">
         monetize your service in minutes.
       </h1>
+      <p className="text-gray-400 mb-4">build an api service. list it. earn.</p>
       <div className="flex gap-4 mb-8">
-        <SecondaryButton href="/about">how it works</SecondaryButton>
-        <SecondaryButton href="/launch">launch a service</SecondaryButton>
+        <PrimaryButton href="/launch">launch a service</PrimaryButton>
       </div>
 
       <h2 className="text-xl font-semibold mt-6">available services</h2>
