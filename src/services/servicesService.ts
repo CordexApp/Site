@@ -12,6 +12,8 @@ interface CreateServiceRequest {
   name: string;
   endpoint: string;
   image?: string;
+  provider_contract_address?: string;
+  coin_contract_address?: string;
 }
 
 export async function getAllServices(): Promise<Service[]> {

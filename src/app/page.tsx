@@ -1,8 +1,7 @@
-
 import NextLink from "next/link";
 import { PrimaryButton } from "@/ui/PrimaryButton";
 import { Grid } from "@/ui/Grid";
-import { getAllServices } from "@/api/services";
+import { getAllServices } from "@/services/servicesService";
 
 export default async function Home() {
   // Fetch services

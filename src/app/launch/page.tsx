@@ -1,561 +1,95 @@
 "use client";
 
-import { FormEvent, useEffect, useState, useRef } from "react";
-import { parseEther } from "viem";
+import { useEffect } from "react";
+import ServiceForm from "@/components/ServiceForm";
+import DeploymentStatus from "@/components/DeploymentStatus";
 import {
-  useTransaction,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
-import { createService, getUploadPresignedUrl } from "@/api/services";
+  ServiceLaunchProvider,
+  useServiceLaunch,
+} from "@/context/ServiceLaunchContext";
+
+// This component handles the service registration after successful deployment
+function ServiceRegistration() {
+  const {
+    deploymentStatus,
+    txHash,
+    serviceName,
+    apiEndpoint,
+    uploadedImageUrl,
+    registerService,
+    contractAddresses,
+  } = useServiceLaunch();
+
+  // Process transaction receipt when successful
+  useEffect(() => {
+    const handleSuccessfulDeployment = async () => {
+      if (deploymentStatus === "success" && txHash) {
+        try {
+          console.log(
+            "Preparing to register service with contracts:",
+            contractAddresses
+          );
+
+          // Get contract addresses
+          const providerContractAddress =
+            contractAddresses.providerContract || "0x";
+          const coinContractAddress = contractAddresses.coinContract;
+
+          // Register service with the backend
+          await registerService(
+            serviceName,
+            apiEndpoint,
+            uploadedImageUrl,
+            providerContractAddress,
+            coinContractAddress
+          );
+
+          console.log("Service registration complete with contracts:", {
+            provider: providerContractAddress,
+            coin: coinContractAddress,
+          });
+
+          // Additional logging of all addresses
+          console.log("All deployed contract addresses:");
+          console.log(
+            "- Provider Contract:",
+            contractAddresses.providerContract
+          );
+          console.log("- Coin Contract:", contractAddresses.coinContract);
+        } catch (error) {
+          console.error("Error during service registration:", error);
+        }
+      }
+    };
+
+    handleSuccessfulDeployment();
+  }, [
+    deploymentStatus,
+    txHash,
+    registerService,
+    serviceName,
+    apiEndpoint,
+    uploadedImageUrl,
+    contractAddresses,
+  ]);
+
+  return null;
+}
 
 export default function LaunchService() {
   console.log("LaunchService component rendering");
 
-  const [serviceName, setServiceName] = useState("");
-  const [apiEndpoint, setApiEndpoint] = useState("");
-  const [maxEscrow, setMaxEscrow] = useState("");
-  const [tokenName, setTokenName] = useState("");
-  const [tokenSymbol, setTokenSymbol] = useState("");
-  const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
-  const [deploymentStatus, setDeploymentStatus] = useState<
-    "idle" | "pending" | "success" | "error"
-  >("idle");
-  const [errorMessage, setErrorMessage] = useState("");
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // ContractFactory deployed address
-  const contractConfig = {
-    address: "0x5d6beb7d2cdc41ab6adce15c582cba64d32dee00" as `0x${string}`,
-    abi: [
-      {
-        inputs: [
-          { name: "apiEndpoint", type: "string" },
-          { name: "maxEscrow", type: "uint256" },
-          { name: "tokenName", type: "string" },
-          { name: "tokenSymbol", type: "string" },
-        ],
-        name: "deployProviderContract",
-        outputs: [{ name: "", type: "address" }],
-        stateMutability: "nonpayable",
-        type: "function",
-      },
-      {
-        inputs: [{ name: "provider", type: "address" }],
-        name: "getProviderContract",
-        outputs: [{ name: "", type: "address" }],
-        stateMutability: "view",
-        type: "function",
-      },
-      {
-        inputs: [{ name: "provider", type: "address" }],
-        name: "getProviderToken",
-        outputs: [{ name: "", type: "address" }],
-        stateMutability: "view",
-        type: "function",
-      },
-      {
-        inputs: [{ name: "provider", type: "address" }],
-        name: "getProviderContracts",
-        outputs: [{ name: "", type: "address[]" }],
-        stateMutability: "view",
-        type: "function",
-      },
-      {
-        inputs: [{ name: "provider", type: "address" }],
-        name: "getProviderTokens",
-        outputs: [{ name: "", type: "address[]" }],
-        stateMutability: "view",
-        type: "function",
-      },
-    ] as const,
-  };
-
-  // Write contract hook
-  const {
-    writeContract,
-    isPending,
-    error,
-    data: writeData,
-  } = useWriteContract();
-
-  // Update txHash when writeData is available
-  useEffect(() => {
-    if (writeData) {
-      console.log("Contract write successful, txHash:", writeData);
-      setTxHash(writeData);
-      setDeploymentStatus("pending");
-    }
-  }, [writeData]);
-
-  // Handle errors from writeContract
-  useEffect(() => {
-    if (error) {
-      console.error("Contract write error:", error);
-      setDeploymentStatus("error");
-      setErrorMessage(error.message || "Transaction failed");
-    }
-  }, [error]);
-
-  // Transaction status monitoring
-  const {
-    data: txData,
-    isSuccess,
-    isError,
-  } = useTransaction({
-    hash: txHash,
-  });
-
-  // Wait for transaction receipt (replaces manual Etherscan API calls)
-  const { data: receipt, isLoading: isWaitingForReceipt } =
-    useWaitForTransactionReceipt({
-      hash: txHash,
-    });
-
-  useEffect(() => {
-    if (txHash) {
-      console.log("Transaction data:", txData);
-      console.log(
-        "Transaction status - isSuccess:",
-        isSuccess,
-        "isError:",
-        isError
-      );
-    }
-  }, [txHash, txData, isSuccess, isError]);
-
-  // Process transaction receipt when available
-  useEffect(() => {
-    if (receipt && deploymentStatus === "pending") {
-      console.log("Transaction receipt received:", receipt);
-
-      const processReceipt = async () => {
-        try {
-          // Check if transaction was successful
-          if (receipt.status === "success") {
-            console.log("Transaction confirmed successful");
-
-            // Extract contract address from logs if available
-            let contractAddress: string | undefined;
-
-            if (receipt.logs && receipt.logs.length > 0) {
-              // In deployment transactions, the contract address is often found in the logs
-              // We'll log all addresses from logs to help with debugging
-              console.log("Transaction logs:", receipt.logs);
-
-              // Try different approaches to find the contract address
-              for (const log of receipt.logs) {
-                console.log("Log address:", log.address);
-                if (log.address && log.address !== contractConfig.address) {
-                  // If this address is different from the factory contract, it might be our new contract
-                  contractAddress = log.address;
-                  console.log(
-                    "Potential contract address found:",
-                    contractAddress
-                  );
-                  break;
-                }
-              }
-            }
-
-            if (!contractAddress) {
-              console.warn(
-                "Could not extract contract address from logs, using transaction.to as fallback"
-              );
-              // As a fallback, we can try to use other receipt data
-              if (receipt.to && receipt.to !== contractConfig.address) {
-                contractAddress = receipt.to;
-              }
-            }
-
-            if (contractAddress) {
-              console.log(
-                "Registering service with contract address:",
-                contractAddress
-              );
-              try {
-                // Use await here to ensure the registration completes
-                await registerService(contractAddress);
-                console.log("Service registration completed successfully");
-              } catch (error) {
-                console.error("Error during service registration:", error);
-              }
-            } else {
-              console.warn("Could not determine contract address from receipt");
-            }
-
-            // Set status to success regardless of database registration
-            // as the blockchain part succeeded
-            setDeploymentStatus("success");
-          } else {
-            console.error("Transaction reverted on blockchain");
-            setDeploymentStatus("error");
-            setErrorMessage("Transaction reverted on the blockchain");
-          }
-        } catch (error) {
-          console.error("Error processing transaction receipt:", error);
-          setDeploymentStatus("error");
-          setErrorMessage(
-            "Error processing transaction: " +
-              (error instanceof Error ? error.message : String(error))
-          );
-        }
-      };
-
-      processReceipt();
-    }
-  }, [receipt, deploymentStatus, contractConfig.address]);
-
-  // Fallback to transaction result from useTransaction if useWaitForTransactionReceipt doesn't provide needed data
-  useEffect(() => {
-    if (isSuccess && deploymentStatus === "pending" && !receipt) {
-      console.log(
-        "Transaction successful according to useTransaction, but no receipt details yet"
-      );
-      setDeploymentStatus("success");
-    }
-
-    if (isError && deploymentStatus === "pending") {
-      console.error("Transaction failed in useTransaction hook");
-      setDeploymentStatus("error");
-      setErrorMessage("Transaction failed");
-    }
-  }, [isSuccess, isError, deploymentStatus, receipt]);
-
-  // Handle file selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    console.log("File selected:", file?.name || "none");
-    setImageFile(file);
-
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        console.log("File preview generated");
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setImagePreview(null);
-    }
-  };
-
-  // Upload image to S3 via presigned URL
-  const uploadImageToS3 = async (): Promise<string | null> => {
-    if (!imageFile) {
-      console.log("No image file to upload");
-      return null;
-    }
-
-    console.log("Starting image upload process for:", imageFile.name);
-    setIsUploading(true);
-    try {
-      // Get presigned URL
-      console.log("Requesting presigned URL for upload");
-      const presignedData = await getUploadPresignedUrl(
-        imageFile.name,
-        imageFile.type
-      );
-
-      if (!presignedData) {
-        console.error("Failed to get presigned URL");
-        throw new Error("Failed to get upload URL");
-      }
-
-      console.log("Received presigned URL:", presignedData.presigned_url);
-      console.log("Object key:", presignedData.object_key);
-
-      // Upload file to S3
-      console.log("Uploading file to S3...");
-      const uploadResponse = await fetch(presignedData.presigned_url, {
-        method: "PUT",
-        body: imageFile,
-        headers: {
-          "Content-Type": imageFile.type,
-        },
-      });
-
-      if (!uploadResponse.ok) {
-        console.error("S3 upload failed with status:", uploadResponse.status);
-        throw new Error("Failed to upload image");
-      }
-
-      // Construct the S3 URL (this is a standard S3 URL format)
-      const s3BucketUrl =
-        "https://cordex-service-images.s3.us-west-2.amazonaws.com";
-      const finalUrl = `${s3BucketUrl}/${presignedData.object_key}`;
-      console.log("Image uploaded successfully, URL:", finalUrl);
-      return finalUrl;
-    } catch (error) {
-      console.error("Image upload error:", error);
-      return null;
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // Register service in database
-  const registerService = async (contractAddress: string) => {
-    try {
-      console.log(
-        "Starting service registration with contract:",
-        contractAddress
-      );
-
-      // If we have an image, upload it first
-      let imageUrl = uploadedImageUrl;
-      if (imageFile && !imageUrl) {
-        console.log("Uploading image before service registration");
-        imageUrl = await uploadImageToS3();
-        if (imageUrl) {
-          console.log("Image uploaded and URL received:", imageUrl);
-          setUploadedImageUrl(imageUrl);
-        } else {
-          console.warn("Image upload failed during service registration");
-        }
-      }
-
-      // Create service in database
-      console.log("Creating service in database with data:", {
-        name: serviceName,
-        endpoint: apiEndpoint,
-        image: imageUrl || undefined,
-      });
-
-      const newService = await createService({
-        name: serviceName,
-        endpoint: apiEndpoint,
-        image: imageUrl || undefined,
-      });
-
-      if (!newService) {
-        console.error("Failed to register service in database");
-      } else {
-        console.log("Service registered successfully:", newService);
-      }
-    } catch (error) {
-      console.error("Error registering service:", error);
-    }
-  };
-
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    console.log("Form submitted with values:", {
-      serviceName,
-      apiEndpoint,
-      maxEscrow,
-      tokenName,
-      tokenSymbol,
-      hasImage: !!imageFile,
-    });
-
-    if (
-      !apiEndpoint ||
-      !maxEscrow ||
-      !tokenName ||
-      !tokenSymbol ||
-      !serviceName
-    ) {
-      console.warn("Form validation failed - missing required fields");
-      return;
-    }
-
-    setDeploymentStatus("idle");
-    setErrorMessage("");
-    setIsVerifying(false);
-    setTxHash(undefined);
-
-    // Pre-upload image if available
-    if (imageFile && !uploadedImageUrl) {
-      console.log("Pre-uploading image before contract deployment");
-      uploadImageToS3().then((url) => {
-        if (url) {
-          console.log("Pre-upload successful, URL:", url);
-          setUploadedImageUrl(url);
-        } else {
-          console.warn("Pre-upload failed");
-        }
-      });
-    }
-
-    // Call deployProviderContract on the ContractFactory
-    console.log("Initiating contract deployment with parameters:", {
-      apiEndpoint,
-      maxEscrow: parseEther(maxEscrow).toString(),
-      tokenName,
-      tokenSymbol,
-    });
-
-    writeContract({
-      ...contractConfig,
-      functionName: "deployProviderContract",
-      args: [apiEndpoint, parseEther(maxEscrow), tokenName, tokenSymbol],
-    });
-  };
-
   return (
-    <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] px-4 md:px-32 py-12 font-mono bg-black text-white">
-      <h1 className="text-3xl font-bold mb-8">launch your service</h1>
+    <ServiceLaunchProvider>
+      <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] px-4 md:px-32 py-12 font-mono bg-black text-white">
+        <h1 className="text-3xl font-bold mb-8">launch your service</h1>
 
-      <div className="w-full max-w-lg">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm mb-1">service name</label>
-            <input
-              type="text"
-              value={serviceName}
-              onChange={(e) => setServiceName(e.target.value)}
-              className="w-full px-4 py-2 bg-transparent border border-gray-700 focus:border-white transition-colors rounded-none focus:outline-none"
-              placeholder="my awesome service"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">api endpoint</label>
-            <input
-              type="text"
-              value={apiEndpoint}
-              onChange={(e) => setApiEndpoint(e.target.value)}
-              className="w-full px-4 py-2 bg-transparent border border-gray-700 focus:border-white transition-colors rounded-none focus:outline-none"
-              placeholder="https://api.myservice.com"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">service image</label>
-            <div className="flex items-center space-x-4">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 border border-gray-700 hover:border-white transition-colors"
-              >
-                {imageFile ? "change image" : "select image"}
-              </button>
-              {imagePreview && (
-                <div className="relative w-16 h-16 overflow-hidden">
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="object-cover w-full h-full"
-                  />
-                </div>
-              )}
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/*"
-                className="hidden"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">max escrow (eth)</label>
-            <input
-              type="number"
-              value={maxEscrow}
-              onChange={(e) => setMaxEscrow(e.target.value)}
-              step="0.001"
-              className="w-full px-4 py-2 bg-transparent border border-gray-700 focus:border-white transition-colors rounded-none focus:outline-none"
-              placeholder="0.1"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">token name</label>
-            <input
-              type="text"
-              value={tokenName}
-              onChange={(e) => setTokenName(e.target.value)}
-              className="w-full px-4 py-2 bg-transparent border border-gray-700 focus:border-white transition-colors rounded-none focus:outline-none"
-              placeholder="my service token"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">token symbol</label>
-            <input
-              type="text"
-              value={tokenSymbol}
-              onChange={(e) => setTokenSymbol(e.target.value)}
-              className="w-full px-4 py-2 bg-transparent border border-gray-700 focus:border-white transition-colors rounded-none focus:outline-none"
-              placeholder="mst"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={
-              isPending ||
-              deploymentStatus === "pending" ||
-              isWaitingForReceipt ||
-              isUploading
-            }
-            className="relative text-white font-medium group px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isPending
-              ? "submitting..."
-              : deploymentStatus === "pending"
-              ? "confirming..."
-              : isWaitingForReceipt
-              ? "verifying..."
-              : isUploading
-              ? "uploading image..."
-              : "launch service"}
-            <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white origin-left transform scale-x-100 transition-transform group-hover:scale-x-0"></span>
-          </button>
-
-          {deploymentStatus === "error" && (
-            <div className="text-red-500 mt-2 p-3 border border-red-500">
-              <p className="font-bold">Deployment failed</p>
-              <p>{errorMessage}</p>
-              {txHash && (
-                <a
-                  href={`https://sepolia-optimism.etherscan.io/tx/${txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="relative text-white font-medium group inline-block mt-2"
-                >
-                  view transaction
-                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white origin-left transform scale-x-100 transition-transform group-hover:scale-x-0"></span>
-                </a>
-              )}
-            </div>
-          )}
-
-          {deploymentStatus === "success" && (
-            <div className="text-green-500 mt-4 p-3 border border-green-500 space-y-2">
-              <p className="font-bold">Service successfully launched!</p>
-              <p>
-                Your service is now live on the blockchain and registered in our
-                database.
-              </p>
-              {txHash && (
-                <a
-                  href={`https://sepolia-optimism.etherscan.io/tx/${txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="relative text-white font-medium group inline-block"
-                >
-                  view transaction
-                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white origin-left transform scale-x-100 transition-transform group-hover:scale-x-0"></span>
-                </a>
-              )}
-            </div>
-          )}
-        </form>
+        <div className="w-full max-w-lg">
+          <ServiceForm />
+          <DeploymentStatus />
+          <ServiceRegistration />
+        </div>
       </div>
-    </div>
+    </ServiceLaunchProvider>
   );
 }

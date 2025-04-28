@@ -1,8 +1,10 @@
-import { getServiceById } from "@/api/services";
+import { getServiceById } from "@/services/servicesService";
 import { ServiceProvider } from "@/context/ServiceContext";
 import { SecondaryButton } from "@/components/ui/SecondaryButton";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import ServiceRequestFormWrapper from "@/components/ServiceRequestFormWrapper";
+import ServiceHealthWrapper from "@/components/ServiceHealthWrapper";
 
 interface ServicePageProps {
   params: {
@@ -40,13 +42,28 @@ export default async function ServicePage({ params }: ServicePageProps) {
 
           <div className="flex flex-col w-full md:w-2/3">
             <h1 className="text-3xl font-bold mb-2">{service.name}</h1>
-            <p className="text-gray-400 mb-4">Endpoint: {service.endpoint}</p>
+
+            <div className="flex items-center mb-4">
+              <p className="text-gray-400 mr-4">Endpoint: {service.endpoint}</p>
+              <ServiceHealthWrapper endpoint={service.endpoint} />
+            </div>
+
             <p className="text-gray-300 mb-6">
               Added: {new Date(service.created_at).toLocaleDateString()}
             </p>
 
             <div className="flex gap-4 mb-8">
               <SecondaryButton href="/">Back to Services</SecondaryButton>
+            </div>
+
+            <div className="w-full border-t border-gray-700 pt-6">
+              <ServiceRequestFormWrapper
+                serviceName={service.name}
+                endpoint={service.endpoint}
+                providerContractAddress={
+                  service.provider_contract_address || ""
+                }
+              />
             </div>
           </div>
         </div>
