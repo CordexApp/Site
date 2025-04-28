@@ -1,7 +1,8 @@
+import NavigationBar from "@/components/NavigationBar";
 import type { Metadata } from "next";
 import { Source_Code_Pro } from "next/font/google";
 import "./globals.css";
-import NavigationBar from "@/components/NavigationBar";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "Cordex",
