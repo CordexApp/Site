@@ -2,7 +2,11 @@
 
 import { FormEvent, useEffect, useState, useRef } from "react";
 import { parseEther } from "viem";
-import { useTransaction, useWriteContract } from "wagmi";
+import {
+  useTransaction,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
 import { createService, getUploadPresignedUrl } from "@/api/services";
 
 export default function LaunchService() {
@@ -107,6 +111,12 @@ export default function LaunchService() {
     hash: txHash,
   });
 
+  // Wait for transaction receipt (replaces manual Etherscan API calls)
+  const { data: receipt, isLoading: isWaitingForReceipt } =
+    useWaitForTransactionReceipt({
+      hash: txHash,
+    });
+
   useEffect(() => {
     if (txHash) {
       console.log("Transaction data:", txData);
@@ -119,119 +129,103 @@ export default function LaunchService() {
     }
   }, [txHash, txData, isSuccess, isError]);
 
-  // Verify transaction outcome when transaction is confirmed
+  // Process transaction receipt when available
   useEffect(() => {
-    // Only run this if we have a transaction hash, the transaction is successful,
-    // we're in pending state, and we're not already verifying
-    if (txHash && isSuccess && deploymentStatus === "pending" && !isVerifying) {
-      console.log("Starting transaction verification process");
-      setIsVerifying(true);
+    if (receipt && deploymentStatus === "pending") {
+      console.log("Transaction receipt received:", receipt);
 
-      // Manual check for transaction status using Etherscan API
-      const checkTransactionStatus = async () => {
+      const processReceipt = async () => {
         try {
-          console.log("Fetching transaction receipt for hash:", txHash);
-          // Use the direct transaction receipt approach which is more reliable
-          const receiptResponse = await fetch(
-            `https://sepolia-optimism.etherscan.io/api?module=proxy&action=eth_getTransactionReceipt&txhash=${txHash}`
-          );
-          const receiptData = await receiptResponse.json();
+          // Check if transaction was successful
+          if (receipt.status === "success") {
+            console.log("Transaction confirmed successful");
 
-          console.log("Transaction receipt:", receiptData);
+            // Extract contract address from logs if available
+            let contractAddress: string | undefined;
 
-          // Check if status is 0x0 (failure) in the receipt
-          if (receiptData?.result?.status === "0x0") {
-            console.error("Transaction reverted on blockchain");
-            setDeploymentStatus("error");
-            setErrorMessage("Transaction reverted on the blockchain");
-          } else if (receiptData?.result?.status === "0x1") {
-            // Status 0x1 means success
-            console.log("Transaction confirmed successful (0x1)");
-            setDeploymentStatus("success");
+            if (receipt.logs && receipt.logs.length > 0) {
+              // In deployment transactions, the contract address is often found in the logs
+              // We'll log all addresses from logs to help with debugging
+              console.log("Transaction logs:", receipt.logs);
 
-            // Get the contract address from the transaction receipt
-            const contractAddress = receiptData?.result?.logs?.find(
-              (log: any) => log.topics?.length > 0
-            )?.address;
+              // Try different approaches to find the contract address
+              for (const log of receipt.logs) {
+                console.log("Log address:", log.address);
+                if (log.address && log.address !== contractConfig.address) {
+                  // If this address is different from the factory contract, it might be our new contract
+                  contractAddress = log.address;
+                  console.log(
+                    "Potential contract address found:",
+                    contractAddress
+                  );
+                  break;
+                }
+              }
+            }
 
-            console.log("Extracted contract address:", contractAddress);
+            if (!contractAddress) {
+              console.warn(
+                "Could not extract contract address from logs, using transaction.to as fallback"
+              );
+              // As a fallback, we can try to use other receipt data
+              if (receipt.to && receipt.to !== contractConfig.address) {
+                contractAddress = receipt.to;
+              }
+            }
 
             if (contractAddress) {
-              // Register service in our database
               console.log(
                 "Registering service with contract address:",
                 contractAddress
               );
-              await registerService(contractAddress);
-            } else {
-              console.warn("Could not extract contract address from logs");
-            }
-          } else {
-            console.log(
-              "Transaction status not definitively determined from receipt, trying secondary verification"
-            );
-            // If we can't determine the status from the receipt, try the transaction status API
-            try {
-              const response = await fetch(
-                `https://sepolia-optimism.etherscan.io/api?module=transaction&action=getstatus&txhash=${txHash}`
-              );
-              const data = await response.json();
-
-              console.log("Transaction status response:", data);
-
-              // If the API indicates an error in the transaction
-              if (data?.status === "1" && data?.result?.isError === "1") {
-                console.error(
-                  "Transaction execution failed:",
-                  data?.result?.errDescription
-                );
-                setDeploymentStatus("error");
-
-                // Special case for the known error - this is now removed with the new contract
-                if (
-                  data?.result?.errDescription?.includes(
-                    "Provider already has a contract"
-                  )
-                ) {
-                  setErrorMessage("Provider already has a contract");
-                } else {
-                  setErrorMessage(
-                    data?.result?.errDescription || "Contract execution failed"
-                  );
-                }
-              } else {
-                // If we get here, default to success
-                console.log(
-                  "Secondary verification complete, defaulting to success"
-                );
-                setDeploymentStatus("success");
+              try {
+                // Use await here to ensure the registration completes
+                await registerService(contractAddress);
+                console.log("Service registration completed successfully");
+              } catch (error) {
+                console.error("Error during service registration:", error);
               }
-            } catch (innerErr) {
-              console.error("Error in secondary verification:", innerErr);
-              // Default to success if both verification methods fail
-              setDeploymentStatus("success");
+            } else {
+              console.warn("Could not determine contract address from receipt");
             }
+
+            // Set status to success regardless of database registration
+            // as the blockchain part succeeded
+            setDeploymentStatus("success");
+          } else {
+            console.error("Transaction reverted on blockchain");
+            setDeploymentStatus("error");
+            setErrorMessage("Transaction reverted on the blockchain");
           }
-        } catch (err) {
-          console.error("Error checking transaction status:", err);
-          // Default to success if verification fails completely
-          // This assumes that isSuccess from useTransaction is reliable enough
-          setDeploymentStatus("success");
-        } finally {
-          setIsVerifying(false);
+        } catch (error) {
+          console.error("Error processing transaction receipt:", error);
+          setDeploymentStatus("error");
+          setErrorMessage(
+            "Error processing transaction: " +
+              (error instanceof Error ? error.message : String(error))
+          );
         }
       };
 
-      checkTransactionStatus();
+      processReceipt();
+    }
+  }, [receipt, deploymentStatus, contractConfig.address]);
+
+  // Fallback to transaction result from useTransaction if useWaitForTransactionReceipt doesn't provide needed data
+  useEffect(() => {
+    if (isSuccess && deploymentStatus === "pending" && !receipt) {
+      console.log(
+        "Transaction successful according to useTransaction, but no receipt details yet"
+      );
+      setDeploymentStatus("success");
     }
 
-    // Handle transaction error
     if (isError && deploymentStatus === "pending") {
       console.error("Transaction failed in useTransaction hook");
       setDeploymentStatus("error");
       setErrorMessage("Transaction failed");
     }
-  }, [txHash, isSuccess, isError, deploymentStatus, isVerifying]);
+  }, [isSuccess, isError, deploymentStatus, receipt]);
 
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -505,7 +499,7 @@ export default function LaunchService() {
             disabled={
               isPending ||
               deploymentStatus === "pending" ||
-              isVerifying ||
+              isWaitingForReceipt ||
               isUploading
             }
             className="relative text-white font-medium group px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -514,7 +508,7 @@ export default function LaunchService() {
               ? "submitting..."
               : deploymentStatus === "pending"
               ? "confirming..."
-              : isVerifying
+              : isWaitingForReceipt
               ? "verifying..."
               : isUploading
               ? "uploading image..."
