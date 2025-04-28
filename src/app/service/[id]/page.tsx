@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import ServiceRequestFormWrapper from "@/components/ServiceRequestFormWrapper";
 import ServiceHealthWrapper from "@/components/ServiceHealthWrapper";
 import ContractStatusWrapper from "@/components/ContractStatusWrapper";
+import ContractMaxEscrowWrapper from "@/components/ContractMaxEscrowWrapper";
 
 interface ServicePageProps {
   params: {
@@ -55,6 +56,11 @@ export default async function ServicePage({ params }: ServicePageProps) {
               <div className="flex items-center">
                 <p className="text-gray-400 mr-4">Contract:</p>
                 <ContractStatusWrapper />
+              </div>
+
+              <div className="flex items-center">
+                <p className="text-gray-400 mr-4">Escrow:</p>
+                <ContractMaxEscrowWrapper />
               </div>
             </div>
 

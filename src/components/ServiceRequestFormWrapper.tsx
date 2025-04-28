@@ -3,9 +3,44 @@
 import { useEffect } from "react";
 import { useService } from "@/context/ServiceContext";
 import ServiceRequestForm from "./ServiceRequestForm";
+import { usePublicClient } from "wagmi";
+import { getContractMaxEscrow } from "@/services/contractServices";
 
 export default function ServiceRequestFormWrapper() {
-  const { service } = useService();
+  const { service, maxEscrow, setMaxEscrow } = useService();
+  const publicClient = usePublicClient();
+
+  // Fetch maxEscrow when component mounts
+  useEffect(() => {
+    const fetchMaxEscrow = async () => {
+      if (service?.provider_contract_address && publicClient) {
+        console.log(
+          "[ServiceRequestFormWrapper] Fetching maxEscrow for contract:",
+          service.provider_contract_address
+        );
+
+        try {
+          const escrowValue = await getContractMaxEscrow(
+            publicClient,
+            service.provider_contract_address as `0x${string}`
+          );
+
+          console.log(
+            "[ServiceRequestFormWrapper] Setting maxEscrow in context:",
+            escrowValue
+          );
+          setMaxEscrow(escrowValue);
+        } catch (error) {
+          console.error(
+            "[ServiceRequestFormWrapper] Error fetching maxEscrow:",
+            error
+          );
+        }
+      }
+    };
+
+    fetchMaxEscrow();
+  }, [service?.provider_contract_address, publicClient, setMaxEscrow]);
 
   const serviceName = service?.name || "";
   const endpoint = service?.endpoint || "";

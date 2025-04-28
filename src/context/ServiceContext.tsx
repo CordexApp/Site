@@ -10,6 +10,8 @@ interface ServiceContextType {
   setLoading: (loading: boolean) => void;
   error: string | null;
   setError: (error: string | null) => void;
+  maxEscrow: string | null;
+  setMaxEscrow: (maxEscrow: string | null) => void;
 }
 
 const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
@@ -24,6 +26,7 @@ export function ServiceProvider({
   const [service, setService] = useState<Service | null>(initialService);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [maxEscrow, setMaxEscrow] = useState<string | null>(null);
 
   const value = {
     service,
@@ -32,6 +35,8 @@ export function ServiceProvider({
     setLoading,
     error,
     setError,
+    maxEscrow,
+    setMaxEscrow,
   };
 
   return (

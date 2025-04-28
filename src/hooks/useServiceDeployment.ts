@@ -31,6 +31,16 @@ export default function useServiceDeployment() {
   >("idle");
   const publicClient = usePublicClient();
 
+  // Store service details for registration
+  const [serviceDetails, setServiceDetails] = useState<{
+    name: string;
+    endpoint: string;
+    imageUrl: string | null;
+  } | null>(null);
+
+  // Flag to track if registration has been done
+  const [isRegistered, setIsRegistered] = useState(false);
+
   // Write contract hook
   const {
     writeContract,
@@ -84,8 +94,8 @@ export default function useServiceDeployment() {
     }
   }, [receipt]);
 
-  // Register service in database
-  const registerService = async (
+  // Internal function to register service
+  const registerServiceInDb = async (
     serviceName: string,
     apiEndpoint: string,
     imageUrl: string | null,
@@ -120,6 +130,7 @@ export default function useServiceDeployment() {
         throw new Error("Service creation failed");
       } else {
         console.log("Service registered successfully:", newService);
+        setIsRegistered(true);
       }
     } catch (error) {
       console.error("Error registering service:", error);
@@ -141,6 +152,14 @@ export default function useServiceDeployment() {
     setErrorMessage("");
     setTxHash(undefined);
     setContractAddresses({});
+    setIsRegistered(false);
+
+    // Store service details for later registration
+    setServiceDetails({
+      name: params.serviceName,
+      endpoint: params.apiEndpoint,
+      imageUrl: params.imageUrl,
+    });
 
     console.log("Initiating contract deployment with parameters:", {
       apiEndpoint: params.apiEndpoint,
@@ -266,9 +285,38 @@ export default function useServiceDeployment() {
     publicClient,
   ]);
 
+  // Auto-register the service when deployment succeeds and we have contract addresses
+  useEffect(() => {
+    const autoRegisterService = async () => {
+      if (
+        deploymentStatus === "success" &&
+        serviceDetails &&
+        contractAddresses.providerContract &&
+        !isRegistered
+      ) {
+        try {
+          console.log("Auto-registering service after successful deployment");
+
+          await registerServiceInDb(
+            serviceDetails.name,
+            serviceDetails.endpoint,
+            serviceDetails.imageUrl,
+            contractAddresses.providerContract,
+            contractAddresses.coinContract
+          );
+
+          console.log("Service auto-registration complete");
+        } catch (error) {
+          console.error("Error during service auto-registration:", error);
+        }
+      }
+    };
+
+    autoRegisterService();
+  }, [deploymentStatus, contractAddresses, serviceDetails, isRegistered]);
+
   return {
     deployService,
-    registerService,
     deploymentStatus,
     isPending,
     isWaitingForReceipt,

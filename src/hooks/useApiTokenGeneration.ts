@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { generateApiToken } from "@/services/contractServices";
+import { useService } from "@/context/ServiceContext";
 
 interface TokenGenerationState {
   tokenHash: string | null;
@@ -13,6 +14,9 @@ interface TokenGenerationState {
 }
 
 export default function useApiTokenGeneration() {
+  // Get maxEscrow from context
+  const { maxEscrow: contextMaxEscrow } = useService();
+
   // Token generation state
   const [tokenState, setTokenState] = useState<TokenGenerationState>({
     tokenHash: null,
@@ -129,7 +133,7 @@ export default function useApiTokenGeneration() {
   // Function to initiate token generation
   const generateToken = async (
     providerContractAddress: string,
-    maxEscrow: string = "0.0001" // Default escrow amount
+    maxEscrow: string = contextMaxEscrow || "0.0001" // Use context value or fallback
   ) => {
     try {
       console.log("[useApiTokenGeneration] Starting token generation process");

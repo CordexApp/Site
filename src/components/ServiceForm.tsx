@@ -56,7 +56,7 @@ export default function ServiceForm() {
       />
 
       <div>
-        <label className="block text-sm mb-1">max escrow (eth)</label>
+        <label className="block text-sm mb-1">max escrow (crdx)</label>
         <input
           type="number"
           value={maxEscrow}

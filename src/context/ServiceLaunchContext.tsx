@@ -45,13 +45,6 @@ interface ServiceLaunchContextType {
 
   // Actions
   handleSubmit: (e: FormEvent<HTMLFormElement>) => Promise<void>;
-  registerService: (
-    serviceName: string,
-    apiEndpoint: string,
-    imageUrl: string | null,
-    providerContractAddress: string,
-    coinContractAddress?: string
-  ) => Promise<void>;
   activateContract: (contractAddress: `0x${string}`) => void;
 }
 
@@ -79,7 +72,6 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
 
   const {
     deployService,
-    registerService,
     deploymentStatus,
     isPending,
     isWaitingForReceipt,
@@ -178,7 +170,6 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
 
     // Actions
     handleSubmit,
-    registerService,
     activateContract,
   };
 

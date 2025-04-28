@@ -361,6 +361,43 @@ export const getContractProvider = async (
   }
 };
 
+// Get the maxEscrow value from a provider contract
+export const getContractMaxEscrow = async (
+  publicClient: ReturnType<typeof usePublicClient>,
+  providerContractAddress: `0x${string}`
+): Promise<string | null> => {
+  console.log(
+    "[contractServices] Getting maxEscrow for contract:",
+    providerContractAddress
+  );
+
+  if (!publicClient) {
+    console.log("[contractServices] Public client not available");
+    return null;
+  }
+
+  try {
+    // Call the maxEscrow function
+    const maxEscrowBigInt = await publicClient.readContract({
+      address: providerContractAddress,
+      abi: providerContractAbi,
+      functionName: "maxEscrow",
+    });
+
+    // Convert from Wei to Ether as a formatted string
+    const maxEscrowInEther = (Number(maxEscrowBigInt) / 1e18).toString();
+
+    console.log(
+      "[contractServices] Contract maxEscrow value:",
+      maxEscrowInEther
+    );
+    return maxEscrowInEther;
+  } catch (error) {
+    console.error("[contractServices] Error getting maxEscrow:", error);
+    return null;
+  }
+};
+
 // Set the active status of a provider contract
 export const setContractActive = (
   writeContract: ReturnType<typeof useWriteContract>["writeContract"],
