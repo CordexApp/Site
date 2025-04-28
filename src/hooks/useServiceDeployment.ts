@@ -10,6 +10,7 @@ import {
   deployProviderContract,
   extractContractAddressFromReceipt,
   getProviderContractAddress,
+  setContractActive,
 } from "@/services/contractServices";
 
 export default function useServiceDeployment() {
@@ -22,6 +23,12 @@ export default function useServiceDeployment() {
     providerContract?: `0x${string}`;
     coinContract?: `0x${string}`;
   }>({});
+  const [currentAction, setCurrentAction] = useState<
+    "deploy" | "activate" | null
+  >(null);
+  const [activationStatus, setActivationStatus] = useState<
+    "idle" | "pending" | "success" | "error"
+  >("idle");
   const publicClient = usePublicClient();
 
   // Write contract hook
@@ -35,20 +42,34 @@ export default function useServiceDeployment() {
   // Update txHash when writeData is available
   useEffect(() => {
     if (writeData) {
-      console.log("Contract write successful, txHash:", writeData);
+      console.log(
+        `Contract ${currentAction} write successful, txHash:`,
+        writeData
+      );
       setTxHash(writeData);
-      setDeploymentStatus("pending");
+
+      if (currentAction === "deploy") {
+        setDeploymentStatus("pending");
+      } else if (currentAction === "activate") {
+        setActivationStatus("pending");
+      }
     }
-  }, [writeData]);
+  }, [writeData, currentAction]);
 
   // Handle errors from writeContract
   useEffect(() => {
     if (error) {
-      console.error("Contract write error:", error);
-      setDeploymentStatus("error");
-      setErrorMessage(error.message || "Transaction failed");
+      console.error(`Contract ${currentAction} write error:`, error);
+
+      if (currentAction === "deploy") {
+        setDeploymentStatus("error");
+        setErrorMessage(error.message || "Deployment failed");
+      } else if (currentAction === "activate") {
+        setActivationStatus("error");
+        setErrorMessage(error.message || "Activation failed");
+      }
     }
-  }, [error]);
+  }, [error, currentAction]);
 
   // Wait for transaction receipt
   const { data: receipt, isLoading: isWaitingForReceipt } =
@@ -115,6 +136,7 @@ export default function useServiceDeployment() {
     tokenSymbol: string;
     imageUrl: string | null;
   }) => {
+    setCurrentAction("deploy");
     setDeploymentStatus("idle");
     setErrorMessage("");
     setTxHash(undefined);
@@ -137,10 +159,12 @@ export default function useServiceDeployment() {
 
   // Process transaction receipt when available
   useEffect(() => {
-    if (receipt && deploymentStatus === "pending") {
-      console.log("Transaction receipt received:", receipt);
+    if (!receipt) return;
 
-      const processReceipt = async () => {
+    if (currentAction === "deploy" && deploymentStatus === "pending") {
+      console.log("Processing deployment receipt:", receipt);
+
+      const processDeploymentReceipt = async () => {
         try {
           // Check if transaction was successful
           if (receipt.status === "success") {
@@ -220,9 +244,27 @@ export default function useServiceDeployment() {
         }
       };
 
-      processReceipt();
+      processDeploymentReceipt();
+    } else if (currentAction === "activate" && activationStatus === "pending") {
+      console.log("Processing activation receipt:", receipt);
+
+      // For activation, we only need to check if the transaction was successful
+      if (receipt.status === "success") {
+        console.log("Contract activation successful");
+        setActivationStatus("success");
+      } else {
+        console.error("Contract activation failed");
+        setActivationStatus("error");
+        setErrorMessage("Contract activation transaction failed");
+      }
     }
-  }, [receipt, deploymentStatus, publicClient]);
+  }, [
+    receipt,
+    deploymentStatus,
+    activationStatus,
+    currentAction,
+    publicClient,
+  ]);
 
   return {
     deployService,
@@ -234,5 +276,21 @@ export default function useServiceDeployment() {
     errorMessage,
     contractAddresses,
     setDeploymentStatus,
+    activationStatus,
+    activateContract: (contractAddress: `0x${string}`) => {
+      if (!contractAddress) {
+        console.error("Cannot activate: No provider contract address provided");
+        return;
+      }
+
+      // Set the current action to "activate" so the receipt handler knows what to do
+      setCurrentAction("activate");
+      setActivationStatus("pending");
+      setErrorMessage("");
+      setTxHash(undefined);
+
+      console.log("Activating provider contract:", contractAddress);
+      return setContractActive(writeContract, contractAddress, true);
+    },
   };
 }

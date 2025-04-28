@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import ServiceForm from "@/components/ServiceForm";
 import DeploymentStatus from "@/components/DeploymentStatus";
+import ContractActivation from "@/components/ContractActivation";
 import {
   ServiceLaunchProvider,
   useServiceLaunch,
@@ -87,6 +88,7 @@ export default function LaunchService() {
         <div className="w-full max-w-lg">
           <ServiceForm />
           <DeploymentStatus />
+          <ContractActivation />
           <ServiceRegistration />
         </div>
       </div>

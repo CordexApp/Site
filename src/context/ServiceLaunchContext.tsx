@@ -41,6 +41,7 @@ interface ServiceLaunchContextType {
     providerContract?: `0x${string}`;
     coinContract?: `0x${string}`;
   };
+  activationStatus: "idle" | "pending" | "success" | "error";
 
   // Actions
   handleSubmit: (e: FormEvent<HTMLFormElement>) => Promise<void>;
@@ -51,6 +52,7 @@ interface ServiceLaunchContextType {
     providerContractAddress: string,
     coinContractAddress?: string
   ) => Promise<void>;
+  activateContract: (contractAddress: `0x${string}`) => void;
 }
 
 const ServiceLaunchContext = createContext<
@@ -84,6 +86,8 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
     txHash,
     errorMessage,
     contractAddresses,
+    activateContract,
+    activationStatus,
   } = useServiceDeployment();
 
   // Handle form submission
@@ -170,10 +174,12 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
     txHash,
     errorMessage,
     contractAddresses,
+    activationStatus,
 
     // Actions
     handleSubmit,
     registerService,
+    activateContract,
   };
 
   return (
