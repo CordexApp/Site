@@ -1,107 +1,155 @@
-import { useState, useEffect } from "react";
-import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useState, useEffect, useCallback } from "react";
+import {
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useAccount,
+  useReadContract,
+  useBalance,
+} from "wagmi";
+import { parseEther, formatEther } from "viem";
 import { generateApiToken } from "@/services/contractServices";
 import { useService } from "@/context/ServiceContext";
+import { providerContractAbi } from "@/services/contractServices";
+import { erc20Abi } from "viem";
+
+// Define the CRDX token address
+const CRDX_TOKEN_ADDRESS =
+  "0xa1F6848E87B968908cFa5478147B93de7C836E0f" as `0x${string}`;
 
 interface TokenGenerationState {
   tokenHash: string | null;
+  isCheckingAllowance: boolean;
+  isApproving: boolean;
+  needsApproval: boolean;
   isGenerating: boolean;
   isPending: boolean;
   isConfirming: boolean;
   isSuccess: boolean;
   error: string | null;
-  transactionHash: `0x${string}` | undefined;
+  approvalTransactionHash: `0x${string}` | undefined;
+  generateTransactionHash: `0x${string}` | undefined;
 }
 
 export default function useApiTokenGeneration() {
-  // Get maxEscrow from context
+  const { address: accountAddress } = useAccount();
   const { maxEscrow: contextMaxEscrow } = useService();
 
-  // Token generation state
   const [tokenState, setTokenState] = useState<TokenGenerationState>({
     tokenHash: null,
+    isCheckingAllowance: false,
+    isApproving: false,
+    needsApproval: false,
     isGenerating: false,
     isPending: false,
     isConfirming: false,
     isSuccess: false,
     error: null,
-    transactionHash: undefined,
+    approvalTransactionHash: undefined,
+    generateTransactionHash: undefined,
   });
 
-  // Contract interaction hooks
+  // Hook for generateToken transaction
   const {
-    writeContract,
-    isPending,
-    error: writeError,
-    data: hash,
+    writeContract: writeGenerateToken,
+    isPending: isGenerateTokenPending,
+    error: generateTokenError,
+    data: generateTokenHash,
+    reset: resetGenerateTokenWrite,
   } = useWriteContract();
 
+  // Hook for approve transaction
   const {
-    isLoading: isConfirming,
-    isSuccess,
-    data: receipt,
+    writeContract: writeApprove,
+    isPending: isApprovePending,
+    error: approveError,
+    data: approveHash,
+    reset: resetApproveWrite,
+  } = useWriteContract();
+
+  // Hook to wait for generateToken transaction receipt
+  const {
+    isLoading: isGenerateTokenConfirming,
+    isSuccess: isGenerateTokenSuccess,
+    data: generateTokenReceipt,
   } = useWaitForTransactionReceipt({
-    hash,
+    hash: generateTokenHash,
   });
 
-  // Update state when transaction is pending
-  useEffect(() => {
-    if (isPending) {
-      console.log("[useApiTokenGeneration] Transaction pending...");
-      setTokenState((prev) => ({
-        ...prev,
-        isPending: true,
-        error: null,
-      }));
-    } else {
-      setTokenState((prev) => ({
-        ...prev,
-        isPending: false,
-      }));
-    }
-  }, [isPending]);
+  // Hook to wait for approve transaction receipt
+  const { isLoading: isApproveConfirming, isSuccess: isApproveSuccess } =
+    useWaitForTransactionReceipt({
+      hash: approveHash,
+    });
 
-  // Update state when transaction hash is received
+  // Combined Pending State (Approve or Generate)
   useEffect(() => {
-    if (hash) {
-      console.log("[useApiTokenGeneration] Transaction hash received:", hash);
-      setTokenState((prev) => ({
-        ...prev,
-        transactionHash: hash,
-      }));
-    }
-  }, [hash]);
-
-  // Update state when waiting for confirmation
-  useEffect(() => {
-    if (isConfirming) {
+    const pending = isGenerateTokenPending || isApprovePending;
+    if (pending !== tokenState.isPending) {
       console.log(
-        "[useApiTokenGeneration] Waiting for transaction confirmation..."
+        "[useApiTokenGeneration] Transaction pending state changed:",
+        pending
+      );
+      setTokenState((prev) => ({ ...prev, isPending: pending, error: null }));
+    }
+  }, [isGenerateTokenPending, isApprovePending, tokenState.isPending]);
+
+  // Combined Confirmation State
+  useEffect(() => {
+    const confirming = isGenerateTokenConfirming || isApproveConfirming;
+    if (confirming !== tokenState.isConfirming) {
+      console.log(
+        "[useApiTokenGeneration] Confirmation state changed:",
+        confirming
+      );
+      setTokenState((prev) => ({ ...prev, isConfirming: confirming }));
+    }
+  }, [isGenerateTokenConfirming, isApproveConfirming, tokenState.isConfirming]);
+
+  // Update generate transaction hash
+  useEffect(() => {
+    if (generateTokenHash) {
+      console.log(
+        "[useApiTokenGeneration] Generate Transaction hash received:",
+        generateTokenHash
       );
       setTokenState((prev) => ({
         ...prev,
-        isConfirming: true,
-      }));
-    } else {
-      setTokenState((prev) => ({
-        ...prev,
-        isConfirming: false,
+        generateTransactionHash: generateTokenHash,
       }));
     }
-  }, [isConfirming]);
+  }, [generateTokenHash]);
 
-  // Update state when transaction is confirmed
+  // Update approval transaction hash
   useEffect(() => {
-    if (isSuccess && receipt) {
-      console.log("[useApiTokenGeneration] Transaction confirmed!", receipt);
+    if (approveHash) {
+      console.log(
+        "[useApiTokenGeneration] Approval Transaction hash received:",
+        approveHash
+      );
       setTokenState((prev) => ({
         ...prev,
-        isSuccess: true,
+        approvalTransactionHash: approveHash,
+        isApproving: false,
       }));
+    }
+  }, [approveHash]);
 
-      // Generate simulated token hash
-      // In a real implementation, you would extract the token hash from the receipt's events
-      const simulatedTokenHash = "0x" + Array(64).fill("0").join("");
+  // Handle successful token generation
+  useEffect(() => {
+    if (isGenerateTokenSuccess && generateTokenReceipt) {
+      console.log(
+        "[useApiTokenGeneration] Generate transaction confirmed!",
+        generateTokenReceipt
+      );
+
+      // TODO: Extract actual token hash from event logs if needed
+      // For now, using a placeholder as before
+      const simulatedTokenHash =
+        "0x" +
+        Array(64)
+          .fill(0)
+          .map((_, i) => i.toString(16))
+          .join("");
       console.log(
         "[useApiTokenGeneration] Generated token hash:",
         simulatedTokenHash
@@ -111,79 +159,250 @@ export default function useApiTokenGeneration() {
         ...prev,
         tokenHash: simulatedTokenHash,
         isGenerating: false,
+        isSuccess: true,
+        error: null,
       }));
     }
-  }, [isSuccess, receipt]);
+  }, [isGenerateTokenSuccess, generateTokenReceipt]);
 
-  // Handle write errors
+  // Handle successful approval
   useEffect(() => {
-    if (writeError) {
-      console.error("[useApiTokenGeneration] Error:", writeError);
+    if (isApproveSuccess) {
+      console.log("[useApiTokenGeneration] Approval transaction confirmed!");
       setTokenState((prev) => ({
         ...prev,
-        error:
-          writeError instanceof Error
-            ? writeError.message
-            : "Transaction failed",
-        isGenerating: false,
+        needsApproval: false,
+        isApproving: false,
+        error: null,
       }));
     }
-  }, [writeError]);
+  }, [isApproveSuccess]);
 
-  // Function to initiate token generation
-  const generateToken = async (
-    providerContractAddress: string,
-    maxEscrow: string = contextMaxEscrow || "0.0001" // Use context value or fallback
-  ) => {
-    try {
-      console.log("[useApiTokenGeneration] Starting token generation process");
-      console.log(
-        "[useApiTokenGeneration] Provider contract:",
-        providerContractAddress
-      );
-      console.log("[useApiTokenGeneration] Escrow amount:", maxEscrow);
+  // Combined Error Handling
+  useEffect(() => {
+    const error = generateTokenError || approveError;
+    if (error) {
+      console.error("[useApiTokenGeneration] Error:", error);
+      setTokenState((prev) => ({
+        ...prev,
+        error: error instanceof Error ? error.message : "Transaction failed",
+        isGenerating: false,
+        isApproving: false,
+        isCheckingAllowance: false,
+      }));
+    }
+  }, [generateTokenError, approveError]);
 
+  // Function to check allowance and trigger approval if needed
+  const checkAndApprove = useCallback(
+    async (
+      providerContractAddress: `0x${string}`,
+      requiredAmountStr: string
+    ): Promise<boolean> => {
+      if (!accountAddress) {
+        setTokenState((prev) => ({
+          ...prev,
+          error: "Please connect your wallet.",
+        }));
+        return false;
+      }
+
+      const requiredAmountBigInt = parseEther(requiredAmountStr);
+      if (requiredAmountBigInt <= BigInt(0)) {
+        console.log(
+          "[useApiTokenGeneration] Required amount is 0, skipping approval."
+        );
+        return true;
+      }
+
+      setTokenState((prev) => ({
+        ...prev,
+        isCheckingAllowance: true,
+        needsApproval: false,
+        error: null,
+      }));
+
+      try {
+        const allowance = (await (window as any).ethereum.request({
+          method: "eth_call",
+          params: [
+            {
+              to: CRDX_TOKEN_ADDRESS,
+              data: `0xdd62ed3e${accountAddress
+                .slice(2)
+                .padStart(64, "0")}${providerContractAddress
+                .slice(2)
+                .padStart(64, "0")}`,
+            },
+            "latest",
+          ],
+        })) as string;
+
+        const currentAllowance = BigInt(allowance);
+        console.log(
+          `[useApiTokenGeneration] Allowance check: Required=${requiredAmountBigInt}, Current=${currentAllowance}`
+        );
+
+        if (currentAllowance < requiredAmountBigInt) {
+          console.log(
+            "[useApiTokenGeneration] Insufficient allowance. Needs approval."
+          );
+          setTokenState((prev) => ({
+            ...prev,
+            needsApproval: true,
+            isCheckingAllowance: false,
+          }));
+          return false;
+        } else {
+          console.log("[useApiTokenGeneration] Sufficient allowance found.");
+          setTokenState((prev) => ({
+            ...prev,
+            needsApproval: false,
+            isCheckingAllowance: false,
+          }));
+          return true;
+        }
+      } catch (err) {
+        console.error("[useApiTokenGeneration] Error checking allowance:", err);
+        setTokenState((prev) => ({
+          ...prev,
+          error:
+            err instanceof Error ? err.message : "Failed to check allowance",
+          isCheckingAllowance: false,
+        }));
+        return false;
+      }
+    },
+    [accountAddress]
+  );
+
+  // Function to initiate the approval transaction
+  const approveSpending = useCallback(
+    async (
+      providerContractAddress: `0x${string}`,
+      requiredAmountStr: string
+    ) => {
+      if (!accountAddress) {
+        setTokenState((prev) => ({
+          ...prev,
+          error: "Please connect your wallet.",
+        }));
+        return;
+      }
+      if (!tokenState.needsApproval) {
+        console.log(
+          "[useApiTokenGeneration] Approval not needed or already sufficient."
+        );
+        return;
+      }
+
+      console.log("[useApiTokenGeneration] Initiating approval transaction...");
+      setTokenState((prev) => ({
+        ...prev,
+        isApproving: true,
+        error: null,
+        approvalTransactionHash: undefined,
+      }));
+
+      try {
+        resetApproveWrite();
+        await writeApprove({
+          address: CRDX_TOKEN_ADDRESS,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [providerContractAddress, parseEther(requiredAmountStr)],
+        });
+        console.log("[useApiTokenGeneration] Approval transaction submitted.");
+      } catch (err) {
+        console.error("[useApiTokenGeneration] writeApprove error:", err);
+      }
+    },
+    [accountAddress, tokenState.needsApproval, writeApprove, resetApproveWrite]
+  );
+
+  // Function to initiate token generation (main user action)
+  const generateToken = useCallback(
+    async (
+      providerContractAddress: string,
+      maxEscrow: string = contextMaxEscrow || "0"
+    ) => {
       setTokenState((prev) => ({
         ...prev,
         isGenerating: true,
+        isSuccess: false,
         error: null,
         tokenHash: null,
-        isSuccess: false,
+        generateTransactionHash: undefined,
+        approvalTransactionHash: undefined,
       }));
+      resetGenerateTokenWrite();
 
-      await generateApiToken(
-        writeContract,
-        providerContractAddress as `0x${string}`,
+      const providerAddress = providerContractAddress as `0x${string}`;
+
+      // 1. Check allowance
+      const allowanceSufficient = await checkAndApprove(
+        providerAddress,
         maxEscrow
       );
 
-      console.log("[useApiTokenGeneration] Token generation initiated");
-    } catch (err) {
-      console.error("[useApiTokenGeneration] Error generating token:", err);
-      setTokenState((prev) => ({
-        ...prev,
-        error: err instanceof Error ? err.message : "Failed to generate token",
-        isGenerating: false,
-      }));
-    }
-  };
+      // 2. If allowance is NOT sufficient, stop (user needs to approve first)
+      if (!allowanceSufficient) {
+        setTokenState((prev) => ({ ...prev, isGenerating: false }));
+        console.log(
+          "[useApiTokenGeneration] Stopping generateToken, approval required."
+        );
+        return;
+      }
+
+      // 3. If allowance IS sufficient, proceed to generate the token
+      console.log(
+        "[useApiTokenGeneration] Allowance sufficient, proceeding to generate token."
+      );
+      try {
+        await generateApiToken(writeGenerateToken, providerAddress, maxEscrow);
+        console.log(
+          "[useApiTokenGeneration] Generate token transaction submitted."
+        );
+      } catch (err) {
+        console.error(
+          "[useApiTokenGeneration] generateApiToken service error:",
+          err
+        );
+        setTokenState((prev) => ({ ...prev, isGenerating: false }));
+      }
+    },
+    [
+      contextMaxEscrow,
+      checkAndApprove,
+      resetGenerateTokenWrite,
+      writeGenerateToken,
+    ]
+  );
 
   // Function to reset the token state
-  const resetToken = () => {
+  const resetToken = useCallback(() => {
+    console.log("[useApiTokenGeneration] Resetting state.");
     setTokenState({
       tokenHash: null,
+      isCheckingAllowance: false,
+      isApproving: false,
+      needsApproval: false,
       isGenerating: false,
       isPending: false,
       isConfirming: false,
       isSuccess: false,
       error: null,
-      transactionHash: undefined,
+      approvalTransactionHash: undefined,
+      generateTransactionHash: undefined,
     });
-  };
+    resetApproveWrite();
+    resetGenerateTokenWrite();
+  }, [resetApproveWrite, resetGenerateTokenWrite]);
 
   return {
     ...tokenState,
     generateToken,
+    approveSpending,
     resetToken,
   };
 }

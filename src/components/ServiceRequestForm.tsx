@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { makeApiRequest } from "@/services/contractServices";
 import { PrimaryButton } from "./ui/PrimaryButton";
 import useApiTokenGeneration from "@/hooks/useApiTokenGeneration";
+import { useService } from "@/context/ServiceContext";
 
 interface ServiceRequestFormProps {
   serviceName: string;
@@ -18,78 +19,152 @@ export default function ServiceRequestForm({
 }: ServiceRequestFormProps) {
   const [requestInput, setRequestInput] = useState("");
   const [response, setResponse] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingApi, setIsLoadingApi] = useState(false);
 
-  // Use the API token generation hook to handle blockchain interactions
+  // Get maxEscrow from context
+  const { maxEscrow } = useService();
+
   const {
     tokenHash,
+    isCheckingAllowance,
+    isApproving,
+    needsApproval,
     isGenerating,
     isPending,
     isConfirming,
-    isSuccess,
+    isSuccess: isTokenGenerationSuccess,
     error,
-    transactionHash,
+    approvalTransactionHash,
+    generateTransactionHash,
     generateToken,
+    approveSpending,
     resetToken,
   } = useApiTokenGeneration();
 
-  console.log("[ServiceRequestForm] Initialized with:", {
-    serviceName,
-    endpoint,
-    providerContractAddress,
-  });
+  useEffect(() => {
+    console.log("[ServiceRequestForm] Hook state:", {
+      tokenHash,
+      isCheckingAllowance,
+      isApproving,
+      needsApproval,
+      isGenerating,
+      isPending,
+      isConfirming,
+      isTokenGenerationSuccess,
+      error,
+      approvalTransactionHash,
+      generateTransactionHash,
+    });
+  }, [
+    tokenHash,
+    isCheckingAllowance,
+    isApproving,
+    needsApproval,
+    isGenerating,
+    isPending,
+    isConfirming,
+    isTokenGenerationSuccess,
+    error,
+    approvalTransactionHash,
+    generateTransactionHash,
+  ]);
 
-  // Handle form submission
+  // Reset API response when token is regenerated or reset
+  useEffect(() => {
+    if (isGenerating || !tokenHash) {
+      setResponse(null);
+    }
+  }, [isGenerating, tokenHash]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log(
-      "[ServiceRequestForm] Form submitted with input:",
-      requestInput
-    );
+    setResponse(null); // Clear previous response
 
     if (!requestInput.trim()) {
-      console.log("[ServiceRequestForm] Empty request input, showing error");
+      console.log("[ServiceRequestForm] Empty request input");
       return;
     }
 
-    // If we don't have a token yet, initiate token generation
-    if (!tokenHash) {
-      console.log(
-        "[ServiceRequestForm] No token hash yet, initiating token generation"
+    if (!providerContractAddress || !maxEscrow) {
+      console.error(
+        "[ServiceRequestForm] Missing contract address or maxEscrow"
       );
-      await generateToken(providerContractAddress);
       return;
     }
 
-    // If we have a token, make the API request
-    try {
+    // If we have a token, make the API request directly
+    if (tokenHash) {
       console.log(
-        "[ServiceRequestForm] Token hash available, making API request"
+        "[ServiceRequestForm] Token available, making API request...",
+        tokenHash
       );
-      setIsLoading(true);
-
-      // Make the API request with the token
-      console.log(
-        "[ServiceRequestForm] Sending request to endpoint:",
-        endpoint
-      );
-      console.log("[ServiceRequestForm] Using token hash:", tokenHash);
-      console.log("[ServiceRequestForm] Request payload:", {
-        query: requestInput,
-      });
-
-      const result = await makeApiRequest(endpoint, tokenHash, {
-        query: requestInput,
-      });
-
-      console.log("[ServiceRequestForm] API response received:", result);
-      setResponse(result);
-    } catch (err) {
-      console.error("[ServiceRequestForm] API request failed:", err);
-    } finally {
-      setIsLoading(false);
+      setIsLoadingApi(true);
+      try {
+        const result = await makeApiRequest(endpoint, tokenHash, {
+          query: requestInput,
+        });
+        console.log("[ServiceRequestForm] API response received:", result);
+        setResponse(result);
+      } catch (err) {
+        console.error("[ServiceRequestForm] API request failed:", err);
+        setResponse({ error: "API request failed." });
+      } finally {
+        setIsLoadingApi(false);
+      }
+      return;
     }
+
+    // If no token, check if approval is needed first
+    if (needsApproval) {
+      console.log(
+        "[ServiceRequestForm] Approval needed, calling approveSpending"
+      );
+      await approveSpending(
+        providerContractAddress as `0x${string}`,
+        maxEscrow
+      );
+      return;
+    }
+
+    // If no token and approval is NOT needed (or already done), generate token
+    console.log(
+      "[ServiceRequestForm] No token, initiating token generation..."
+    );
+    await generateToken(providerContractAddress as `0x${string}`, maxEscrow);
   };
+
+  // Determine button text and status text
+  let buttonText = "Send Request";
+  let statusText = "";
+  const isProcessing =
+    isCheckingAllowance ||
+    isApproving ||
+    isGenerating ||
+    isPending ||
+    isConfirming ||
+    isLoadingApi;
+
+  if (!tokenHash) {
+    if (needsApproval) {
+      buttonText = "Approve CRDX";
+    } else {
+      buttonText = "Generate Token & Send Request";
+    }
+  }
+
+  if (isCheckingAllowance) {
+    statusText = "Checking allowance...";
+  } else if (isApproving) {
+    statusText = "Requesting approval...";
+  } else if (isGenerating) {
+    statusText = "Generating token...";
+  } else if (isPending) {
+    statusText = "Waiting for wallet...";
+  } else if (isConfirming) {
+    statusText = "Confirming transaction...";
+  } else if (isLoadingApi) {
+    statusText = "Sending API request...";
+  }
 
   return (
     <div className="mt-8 w-full">
@@ -101,7 +176,8 @@ export default function ServiceRequestForm({
             htmlFor="request"
             className="block text-sm font-medium text-gray-300 mb-1"
           >
-            Request Payload
+            Request Payload (Requires {maxEscrow ? `${maxEscrow} CRDX` : "N/A"}{" "}
+            escrow)
           </label>
           <textarea
             id="request"
@@ -109,41 +185,58 @@ export default function ServiceRequestForm({
             rows={4}
             value={requestInput}
             onChange={(e) => setRequestInput(e.target.value)}
-            placeholder="Enter your request payload here..."
+            placeholder='e.g., { "prompt": "Generate a cool image" }'
+            disabled={isProcessing}
           />
         </div>
 
         <div>
           <PrimaryButton
             type="submit"
-            disabled={isLoading || isGenerating || isPending || isConfirming}
+            disabled={isProcessing || !requestInput.trim() || !maxEscrow}
           >
-            {!tokenHash ? "Generate Token & Send Request" : "Send Request"}
+            {buttonText}
           </PrimaryButton>
 
-          {(isLoading || isGenerating || isPending || isConfirming) && (
-            <span className="ml-3 text-gray-400">
-              {isPending || isConfirming
-                ? "Confirming transaction..."
-                : isGenerating
-                ? "Generating token..."
-                : "Processing..."}
-            </span>
+          {isProcessing && (
+            <span className="ml-3 text-gray-400">{statusText}</span>
           )}
         </div>
 
-        {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
+        {error && (
+          <div className="text-red-500 text-sm mt-2">
+            Error:{" "}
+            {error.split("Details:")[0] || error.split("Reason:")[0] || error}
+          </div>
+        )}
 
-        {/* Transaction hash link */}
-        {transactionHash && (
+        {/* Approval Transaction hash link */}
+        {approvalTransactionHash && (
           <div className="mt-3 text-sm">
+            Approval Tx:{" "}
             <a
-              href={`https://sepolia-optimism.etherscan.io/tx/${transactionHash}`}
+              href={`https://sepolia-optimism.etherscan.io/tx/${approvalTransactionHash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="relative text-white font-medium group inline-block"
+              className="relative text-white font-medium group inline-block underline"
             >
-              view transaction on etherscan
+              view on etherscan
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white origin-left transform scale-x-100 transition-transform group-hover:scale-x-0"></span>
+            </a>
+          </div>
+        )}
+
+        {/* Generate Transaction hash link */}
+        {generateTransactionHash && (
+          <div className="mt-3 text-sm">
+            Generate Tx:{" "}
+            <a
+              href={`https://sepolia-optimism.etherscan.io/tx/${generateTransactionHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative text-white font-medium group inline-block underline"
+            >
+              view on etherscan
               <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white origin-left transform scale-x-100 transition-transform group-hover:scale-x-0"></span>
             </a>
           </div>
@@ -152,7 +245,7 @@ export default function ServiceRequestForm({
 
       {response && (
         <div className="mt-6">
-          <h3 className="text-lg font-medium mb-2">Response:</h3>
+          <h3 className="text-lg font-medium mb-2">API Response:</h3>
           <pre className="bg-gray-800 p-4 rounded-md overflow-x-auto text-sm">
             {JSON.stringify(response, null, 2)}
           </pre>

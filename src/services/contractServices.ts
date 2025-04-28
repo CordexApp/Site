@@ -8,7 +8,7 @@ import {
 
 // ContractFactory configuration
 export const contractConfig = {
-  address: "0x5d6beb7d2cdc41ab6adce15c582cba64d32dee00" as `0x${string}`,
+  address: "0xca38c4d7889d7337ceea5c53db82f70f12a7b9e7" as `0x${string}`,
   abi: [
     {
       inputs: [
