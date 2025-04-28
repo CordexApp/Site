@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { generateApiToken, makeApiRequest } from "@/services/contractServices";
+import { useState } from "react";
+import { makeApiRequest } from "@/services/contractServices";
 import { PrimaryButton } from "./ui/PrimaryButton";
+import useApiTokenGeneration from "@/hooks/useApiTokenGeneration";
 
 interface ServiceRequestFormProps {
   serviceName: string;
@@ -19,97 +19,25 @@ export default function ServiceRequestForm({
   const [requestInput, setRequestInput] = useState("");
   const [response, setResponse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [tokenHash, setTokenHash] = useState<string | null>(null);
+
+  // Use the API token generation hook to handle blockchain interactions
+  const {
+    tokenHash,
+    isGenerating,
+    isPending,
+    isConfirming,
+    isSuccess,
+    error,
+    transactionHash,
+    generateToken,
+    resetToken,
+  } = useApiTokenGeneration();
 
   console.log("[ServiceRequestForm] Initialized with:", {
     serviceName,
     endpoint,
     providerContractAddress,
   });
-
-  // Contract interaction hooks
-  const {
-    writeContract,
-    isPending: isWritePending,
-    data: hash,
-  } = useWriteContract();
-
-  const {
-    isLoading: isConfirming,
-    isSuccess: isConfirmed,
-    data: receipt,
-  } = useWaitForTransactionReceipt({
-    hash,
-  });
-
-  // Log state changes
-  useEffect(() => {
-    if (isWritePending) {
-      console.log("[ServiceRequestForm] Transaction pending...");
-    }
-  }, [isWritePending]);
-
-  useEffect(() => {
-    if (isConfirming) {
-      console.log(
-        "[ServiceRequestForm] Waiting for transaction confirmation..."
-      );
-    }
-  }, [isConfirming]);
-
-  useEffect(() => {
-    if (hash) {
-      console.log("[ServiceRequestForm] Transaction hash received:", hash);
-    }
-  }, [hash]);
-
-  useEffect(() => {
-    if (isConfirmed) {
-      console.log("[ServiceRequestForm] Transaction confirmed!");
-    }
-  }, [isConfirmed]);
-
-  useEffect(() => {
-    if (receipt) {
-      console.log("[ServiceRequestForm] Transaction receipt:", receipt);
-    }
-  }, [receipt]);
-
-  // Handle token generation
-  const handleGenerateToken = async () => {
-    console.log("[ServiceRequestForm] Starting token generation process");
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // Fixed escrow amount of 0.0001 ETH for now
-      const maxEscrow = "0.0001";
-      console.log("[ServiceRequestForm] Using escrow amount:", maxEscrow);
-      console.log(
-        "[ServiceRequestForm] Provider contract address:",
-        providerContractAddress
-      );
-
-      // Call contract to generate token
-      console.log("[ServiceRequestForm] Calling generateApiToken...");
-      await generateApiToken(
-        writeContract,
-        providerContractAddress as `0x${string}`,
-        maxEscrow
-      );
-      console.log("[ServiceRequestForm] generateApiToken call completed");
-
-      // Token hash will be available after transaction is confirmed
-      console.log(
-        "[ServiceRequestForm] Waiting for transaction confirmation to get token hash"
-      );
-    } catch (err) {
-      console.error("[ServiceRequestForm] Error generating token:", err);
-      setError("Failed to generate access token");
-      setIsLoading(false);
-    }
-  };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -121,18 +49,19 @@ export default function ServiceRequestForm({
 
     if (!requestInput.trim()) {
       console.log("[ServiceRequestForm] Empty request input, showing error");
-      setError("Please enter a request");
       return;
     }
 
+    // If we don't have a token yet, initiate token generation
     if (!tokenHash) {
       console.log(
         "[ServiceRequestForm] No token hash yet, initiating token generation"
       );
-      handleGenerateToken();
+      await generateToken(providerContractAddress);
       return;
     }
 
+    // If we have a token, make the API request
     try {
       console.log(
         "[ServiceRequestForm] Token hash available, making API request"
@@ -155,32 +84,12 @@ export default function ServiceRequestForm({
 
       console.log("[ServiceRequestForm] API response received:", result);
       setResponse(result);
-      setIsLoading(false);
     } catch (err) {
       console.error("[ServiceRequestForm] API request failed:", err);
-      setError("API request failed. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
-
-  // When transaction is confirmed, extract token hash from events
-  if (isConfirmed && receipt && !tokenHash) {
-    console.log(
-      "[ServiceRequestForm] Transaction confirmed, simulating token hash extraction"
-    );
-    // In a real implementation, you would parse the token hash from the receipt
-    // For now, we'll simulate this with a placeholder
-    const simulatedTokenHash = "0x" + Array(64).fill("0").join("");
-    console.log(
-      "[ServiceRequestForm] Generated simulated token hash:",
-      simulatedTokenHash
-    );
-    setTokenHash(simulatedTokenHash);
-    setIsLoading(false);
-    console.log(
-      "[ServiceRequestForm] Token hash set and ready for API request"
-    );
-  }
 
   return (
     <div className="mt-8 w-full">
@@ -207,21 +116,38 @@ export default function ServiceRequestForm({
         <div>
           <PrimaryButton
             type="submit"
-            disabled={isLoading || isWritePending || isConfirming}
+            disabled={isLoading || isGenerating || isPending || isConfirming}
           >
             {!tokenHash ? "Generate Token & Send Request" : "Send Request"}
           </PrimaryButton>
 
-          {(isLoading || isWritePending || isConfirming) && (
+          {(isLoading || isGenerating || isPending || isConfirming) && (
             <span className="ml-3 text-gray-400">
-              {isWritePending || isConfirming
+              {isPending || isConfirming
                 ? "Confirming transaction..."
+                : isGenerating
+                ? "Generating token..."
                 : "Processing..."}
             </span>
           )}
         </div>
 
         {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
+
+        {/* Transaction hash link */}
+        {transactionHash && (
+          <div className="mt-3 text-sm">
+            <a
+              href={`https://sepolia-optimism.etherscan.io/tx/${transactionHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative text-white font-medium group inline-block"
+            >
+              view transaction on etherscan
+              <span className="absolute bottom-0 left-0 w-full h-0.5 bg-white origin-left transform scale-x-100 transition-transform group-hover:scale-x-0"></span>
+            </a>
+          </div>
+        )}
       </form>
 
       {response && (

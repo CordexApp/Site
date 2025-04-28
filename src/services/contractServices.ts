@@ -86,6 +86,27 @@ export const providerContractAbi = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [],
+    name: "isActive",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "provider",
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "_isActive", type: "bool" }],
+    name: "setContractStatus",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
 ] as const;
 
 // Used to extract contract addresses from transaction receipt
@@ -275,6 +296,87 @@ export const generateApiToken = (
     abi: providerContractAbi,
     functionName: "generateToken",
     args: [parseEther(maxEscrow), BigInt(userNonce)],
+  });
+};
+
+// Check if a provider contract is active
+export const checkContractActive = async (
+  publicClient: ReturnType<typeof usePublicClient>,
+  providerContractAddress: `0x${string}`
+): Promise<boolean> => {
+  console.log(
+    "[contractServices] Checking if contract is active:",
+    providerContractAddress
+  );
+
+  if (!publicClient) {
+    console.log("[contractServices] Public client not available");
+    return false;
+  }
+
+  try {
+    // Call the isActive function
+    const isActive = await publicClient.readContract({
+      address: providerContractAddress,
+      abi: providerContractAbi,
+      functionName: "isActive",
+    });
+
+    console.log("[contractServices] Contract active status:", isActive);
+    return Boolean(isActive);
+  } catch (error) {
+    console.error("[contractServices] Error checking contract status:", error);
+    return false;
+  }
+};
+
+// Get the provider address of a contract
+export const getContractProvider = async (
+  publicClient: ReturnType<typeof usePublicClient>,
+  providerContractAddress: `0x${string}`
+): Promise<`0x${string}` | null> => {
+  console.log(
+    "[contractServices] Getting provider address for contract:",
+    providerContractAddress
+  );
+
+  if (!publicClient) {
+    console.log("[contractServices] Public client not available");
+    return null;
+  }
+
+  try {
+    // Call the provider function
+    const provider = await publicClient.readContract({
+      address: providerContractAddress,
+      abi: providerContractAbi,
+      functionName: "provider",
+    });
+
+    console.log("[contractServices] Contract provider address:", provider);
+    return provider as `0x${string}`;
+  } catch (error) {
+    console.error("[contractServices] Error getting contract provider:", error);
+    return null;
+  }
+};
+
+// Set the active status of a provider contract
+export const setContractActive = (
+  writeContract: ReturnType<typeof useWriteContract>["writeContract"],
+  providerContractAddress: `0x${string}`,
+  isActive: boolean
+) => {
+  console.log("[contractServices] Setting contract active status:", {
+    providerContractAddress,
+    isActive,
+  });
+
+  return writeContract({
+    address: providerContractAddress,
+    abi: providerContractAbi,
+    functionName: "setContractStatus",
+    args: [isActive],
   });
 };
 
