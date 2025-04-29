@@ -50,6 +50,18 @@ export const contractConfig = {
       stateMutability: "view",
       type: "function",
     },
+    {
+      inputs: [
+        { name: "providerTokenAddress", type: "address" },
+        { name: "initialTokenAmount", type: "uint256" },
+        { name: "slope", type: "uint256" },
+        { name: "intercept", type: "uint256" },
+      ],
+      name: "deployBondingCurveContract",
+      outputs: [{ name: "", type: "address" }],
+      stateMutability: "nonpayable",
+      type: "function",
+    },
   ] as const,
 };
 

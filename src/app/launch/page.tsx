@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import ServiceForm from "@/components/ServiceForm";
 import DeploymentStatus from "@/components/DeploymentStatus";
 import ContractActivation from "@/components/ContractActivation";
+import BondingCurveSetup from "@/components/BondingCurveSetup";
 import {
   ServiceLaunchProvider,
   useServiceLaunch,
@@ -38,6 +39,7 @@ export default function LaunchService() {
           <ServiceForm />
           <DeploymentStatus />
           <ContractActivation />
+          <BondingCurveSetup />
           <DeploymentInfo />
         </div>
       </div>
