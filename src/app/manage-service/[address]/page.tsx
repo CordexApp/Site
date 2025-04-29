@@ -7,6 +7,7 @@ import {
 } from "@/context/ManageServiceContext";
 import ContractActivation from "@/components/ContractActivation";
 import BondingCurveSetup from "@/components/BondingCurveSetup";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 // Inner component that uses the context
 function ManageServiceContent() {
@@ -24,7 +25,7 @@ function ManageServiceContent() {
   if (isLoading) {
     return (
       <div className="my-8 text-white">
-        <p>Loading service details...</p>
+        <LoadingDots text="Loading service details" />
       </div>
     );
   }
@@ -105,7 +106,7 @@ export default function ManageServicePage() {
 
   return (
     <ManageServiceProvider serviceAddress={formattedAddress}>
-      <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] px-4 md:px-32 py-12 font-mono bg-black text-white">
+      <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] py-12 font-mono bg-black text-white">
         <h1 className="text-3xl font-bold mb-8">manage your service</h1>
         <div className="w-full max-w-lg">
           <ManageServiceContent />

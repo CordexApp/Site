@@ -8,7 +8,7 @@ export default async function Home() {
   const services = await getAllServices();
 
   return (
-    <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] px-4 md:px-32 py-8 bg-black text-white">
+    <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] py-8 bg-black text-white">
       <h1 className="text-3xl font-bold mb-2">
         monetize your service in minutes.
       </h1>

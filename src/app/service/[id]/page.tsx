@@ -24,7 +24,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
 
   return (
     <ServiceProvider initialService={service}>
-      <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] px-4 md:px-32 py-8">
+      <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] py-8">
         <div className="flex flex-col md:flex-row w-full gap-8">
           <div className="w-full md:w-1/3 relative aspect-square overflow-hidden mb-4 md:mb-0">
             {service.image ? (

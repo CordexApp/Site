@@ -18,8 +18,10 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Providers>
-          <NavigationBar />
-          {children}
+          <div className="bg-black text-white px-4 md:px-32">
+            <NavigationBar />
+            {children}
+          </div>
         </Providers>
       </body>
     </html>
