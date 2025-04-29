@@ -1,107 +1,23 @@
 import { parseEther, maxUint256, formatEther } from "viem";
 import { useWriteContract, usePublicClient } from "wagmi";
 
+// Import ABIs
+import { ContractFactoryAbi } from "@/abis/ContractFactory";
+import { ERC20Abi } from "@/abis/ERC20";
+import { BondingCurveAbi } from "@/abis/BondingCurveContract";
+
 // Factory contract address (same as contractServices)
 export const FACTORY_ADDRESS =
   "0xca38c4d7889d7337ceea5c53db82f70f12a7b9e7" as `0x${string}`;
 
-// Minimal ABI for ContractFactory deployBondingCurveContract & getProviderTokens
-export const factoryAbi = [
-  {
-    inputs: [
-      { name: "providerTokenAddress", type: "address" },
-      { name: "initialTokenAmount", type: "uint256" },
-      { name: "slope", type: "uint256" },
-      { name: "intercept", type: "uint256" },
-    ],
-    name: "deployBondingCurveContract",
-    outputs: [{ name: "", type: "address" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "provider", type: "address" }],
-    name: "getProviderTokens",
-    outputs: [{ name: "", type: "address[]" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "provider", type: "address" }],
-    name: "getBondingCurveContract",
-    outputs: [{ name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "provider", type: "address" }],
-    name: "getBondingCurveContracts",
-    outputs: [{ name: "", type: "address[]" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
+// Minimal ABI for ContractFactory (Use imported ABI)
+export const factoryAbi = ContractFactoryAbi;
 
-// Minimal ERC20 ABI for allowance & approve & balanceOf & symbol & name
-export const erc20Abi = [
-  {
-    constant: true,
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" },
-    ],
-    name: "allowance",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    constant: false,
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    name: "approve",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    constant: true,
-    inputs: [{ name: "account", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: "symbol",
-    outputs: [{ name: "", type: "string" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: "name",
-    outputs: [{ name: "", type: "string" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
+// Minimal ERC20 ABI (Use imported ABI)
+export const erc20Abi = ERC20Abi;
 
-// Minimal ABI for bonding curve's providerTokenAddress function
-export const bondingCurveAbi = [
-  {
-    inputs: [],
-    name: "providerTokenAddress",
-    outputs: [{ name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
+// Minimal ABI for bonding curve (Use imported ABI)
+export const bondingCurveAbi = BondingCurveAbi;
 
 // -------- Helper functions --------
 

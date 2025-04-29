@@ -1,344 +1,264 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   useAccount,
   useWriteContract,
-  useWaitForTransactionReceipt,
   usePublicClient,
+  useWaitForTransactionReceipt,
 } from "wagmi";
+import { useManageService } from "@/context/ManageServiceContext";
 import {
   getTokenAllowance,
   approveTokens,
   deployBondingCurveContract,
-  findBondingCurveForProviderToken,
   FACTORY_ADDRESS,
 } from "@/services/bondingCurveServices";
-import { formatEther, maxUint256 } from "viem";
-import { useServiceLaunch } from "@/context/ServiceLaunchContext";
+import { formatEther } from "viem";
 
-export type BondingCurveStatus =
-  | "idle"
-  | "fetching"
-  | "needsApproval"
-  | "approving"
-  | "approved"
-  | "deploying"
-  | "success"
-  | "error";
+// Simple helper to shorten addresses
+export const shorten = (addr: string) =>
+  `${addr.slice(0, 6)}...${addr.slice(addr.length - 4)}`;
 
-interface UseBondingCurveSetupReturn {
-  providerToken: `0x${string}` | null;
-  percentage: string;
-  setPercentage: (pct: string) => void;
-
-  // balances & allowance
-  formattedBalance: string;
-  formattedInitialAmount: string;
-  allowanceEnough: boolean;
-  allowanceDisplay: string;
-
-  // status & tx
-  status: BondingCurveStatus;
-  isPending: boolean;
-  isWaitingReceipt: boolean;
-
-  // existing curve
-  existingBondingCurve: `0x${string}` | null;
-  bondingCurveAddress: `0x${string}` | undefined;
-  checkingExistence: boolean;
-
-  // actions
-  handleApprove: () => void;
-  handleDeploy: () => void;
-}
-
-export default function useBondingCurveSetup(): UseBondingCurveSetupReturn {
-  const { deploymentStatus, contractAddresses } = useServiceLaunch();
-  const { address } = useAccount();
+export function useBondingCurveSetup() {
+  const { address: walletAddress } = useAccount();
   const publicClient = usePublicClient();
+
+  // Transaction state for approval
   const {
-    writeContract,
-    data: writeData,
-    error,
-    isPending,
+    writeContract: writeApprove,
+    data: approveTxHash,
+    isPending: isApprovePending,
+    isError: isApproveError,
+    error: approveError,
   } = useWriteContract();
 
-  // UI / state vars
-  const [providerToken, setProviderToken] = useState<`0x${string}` | null>(
-    null
-  );
-  const [percentage, setPercentage] = useState("50"); // default 50%
+  // Transaction state for deployment
+  const {
+    writeContract: writeDeploy,
+    data: deployTxHash,
+    isPending: isDeployPending,
+    isError: isDeployError,
+    error: deployError,
+  } = useWriteContract();
 
-  // fixed parameters (18-dec scaled)
+  // Track transaction confirmations
+  const { isLoading: isApproveTxConfirming, isSuccess: isApproveTxConfirmed } =
+    useWaitForTransactionReceipt({
+      hash: approveTxHash,
+      confirmations: 1,
+    });
+
+  const { isLoading: isDeployTxConfirming, isSuccess: isDeployTxConfirmed } =
+    useWaitForTransactionReceipt({
+      hash: deployTxHash,
+      confirmations: 1,
+    });
+
+  const {
+    providerTokenAddress,
+    bondingCurveAddress,
+    ownerAddress,
+    refreshData,
+    isLoading: contextLoading,
+  } = useManageService();
+
+  // State
+  const [percentage, setPercentage] = useState("50");
+  const [tokenBalance, setTokenBalance] = useState<bigint>(BigInt(0));
+  const [allowance, setAllowance] = useState<bigint>(BigInt(0));
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Check if the current user is the owner
+  const isOwner = ownerAddress === walletAddress;
+
+  // Calculate values based on percentage
+  const initialTokenAmount =
+    (tokenBalance * BigInt(Number(percentage || "0"))) / BigInt(100);
+  const allowanceEnough = allowance >= initialTokenAmount;
+  const formattedBalance = formatEther(tokenBalance).split(".")[0];
+  const formattedInitialAmount = formatEther(initialTokenAmount).split(".")[0];
+
+  // Fixed parameters (18-dec scaled)
   const fixedSlope = BigInt("100000000000000"); // 0.0001 * 1e18
   const fixedIntercept = BigInt("10000000000000000"); // 0.01 * 1e18
 
-  const [allowance, setAllowance] = useState<bigint>(BigInt(0));
-  const [tokenBalance, setTokenBalance] = useState<bigint>(BigInt(0));
-
-  // Track if bonding curve exists
-  const [existingBondingCurve, setExistingBondingCurve] = useState<
-    `0x${string}` | null
-  >(null);
-  const [checkingExistence, setCheckingExistence] = useState(false);
-
-  const [currentAction, setCurrentAction] = useState<
-    "idle" | "approve" | "deploy"
-  >("idle");
-  const [status, setStatus] = useState<BondingCurveStatus>("idle");
-  const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
-  const [bondingCurveAddress, setBondingCurveAddress] = useState<
-    `0x${string}` | undefined
-  >();
-
-  /* ------------------------------------------------------------------ */
-  /* Effects                                                            */
-  /* ------------------------------------------------------------------ */
-
-  // Check if bonding curve already exists
+  // Update transaction state effects
   useEffect(() => {
-    const checkBondingCurve = async () => {
-      if (
-        !address ||
-        !publicClient ||
-        deploymentStatus !== "success" ||
-        !contractAddresses.providerContract
-      )
-        return;
+    // When approval is confirmed, refresh allowance
+    if (
+      isApproveTxConfirmed &&
+      providerTokenAddress &&
+      walletAddress &&
+      publicClient
+    ) {
+      getTokenAllowance(
+        publicClient,
+        providerTokenAddress,
+        walletAddress,
+        FACTORY_ADDRESS
+      ).then((newAllowance) => {
+        setAllowance(newAllowance);
+      });
+    }
+  }, [isApproveTxConfirmed, providerTokenAddress, walletAddress, publicClient]);
 
-      setCheckingExistence(true);
+  useEffect(() => {
+    // When deployment is confirmed, refresh context data
+    if (isDeployTxConfirmed) {
+      refreshData();
+    }
+  }, [isDeployTxConfirmed, refreshData]);
 
-      try {
-        // First get token address for the provider contract
-        const providerTokenAddress = (await publicClient.readContract({
-          address: FACTORY_ADDRESS,
-          abi: [
-            {
-              inputs: [{ name: "provider", type: "address" }],
-              name: "getProviderToken",
-              outputs: [{ name: "", type: "address" }],
-              stateMutability: "view",
-              type: "function",
-            },
-          ],
-          functionName: "getProviderToken",
-          args: [address as `0x${string}`],
-        })) as `0x${string}`;
-
-        if (providerTokenAddress) {
-          // Find bonding curve that matches this provider token
-          const bondingCurve = await findBondingCurveForProviderToken(
-            publicClient,
-            address as `0x${string}`,
-            providerTokenAddress
-          );
-
-          if (bondingCurve) {
-            setExistingBondingCurve(bondingCurve);
-            setBondingCurveAddress(bondingCurve);
-            setProviderToken(providerTokenAddress);
-            setStatus("success");
-          } else {
-            // bonding curve not yet deployed but we still store token for allowance/balance
-            setProviderToken(providerTokenAddress);
-          }
-        } else {
-          // still store providerTokenAddress if we got it
-          if (providerTokenAddress) setProviderToken(providerTokenAddress);
-        }
-      } catch (err) {
-        console.error(
-          "[useBondingCurveSetup] Error checking bonding curve",
-          err
-        );
-      } finally {
-        setCheckingExistence(false);
-      }
-    };
-
-    checkBondingCurve();
-  }, [
-    publicClient,
-    deploymentStatus,
-    contractAddresses.providerContract,
-    txHash,
-    address,
-  ]);
-
-  // Fetch token balance when token selected
+  // Load token balance when token address is available
   useEffect(() => {
     const fetchBalance = async () => {
-      if (!providerToken || !address || !publicClient) return;
+      if (!providerTokenAddress || !walletAddress || !publicClient) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const bal = (await publicClient.readContract({
-          address: providerToken,
+        setIsLoading(true);
+        // Get token balance
+        const balance = await publicClient.readContract({
+          address: providerTokenAddress,
           abi: [
             {
-              constant: true,
-              inputs: [{ name: "account", type: "address" }],
               name: "balanceOf",
-              outputs: [{ name: "", type: "uint256" }],
-              stateMutability: "view",
               type: "function",
+              stateMutability: "view",
+              inputs: [{ name: "account", type: "address" }],
+              outputs: [{ name: "", type: "uint256" }],
             },
           ],
           functionName: "balanceOf",
-          args: [address],
-        })) as bigint;
-        setTokenBalance(bal);
-      } catch (e) {
-        console.error("[useBondingCurveSetup] Error fetching balance", e);
+          args: [walletAddress],
+        });
+
+        setTokenBalance(BigInt(balance || 0));
+
+        // Get token allowance
+        const allowance = await getTokenAllowance(
+          publicClient,
+          providerTokenAddress,
+          walletAddress,
+          FACTORY_ADDRESS
+        );
+
+        setAllowance(allowance);
+        setIsLoading(false);
+      } catch (err) {
+        console.error("Error fetching token data:", err);
+        setError("Failed to load token data");
+        setIsLoading(false);
       }
     };
+
     fetchBalance();
-  }, [providerToken, address, publicClient]);
+  }, [providerTokenAddress, walletAddress, publicClient]);
 
-  // Check allowance when selected token or deposit changes
-  useEffect(() => {
-    const checkAllowance = async () => {
-      if (!providerToken || !address || !publicClient) return;
-      const allowance = await getTokenAllowance(
-        publicClient,
-        providerToken,
-        address,
-        FACTORY_ADDRESS
-      );
-      setAllowance(allowance);
-    };
-    checkAllowance();
-  }, [providerToken, address, publicClient, txHash]);
-
-  // Wait for tx receipt
-  const { data: receipt, isLoading: isWaitingReceipt } =
-    useWaitForTransactionReceipt({ hash: txHash });
-
-  // Handle new writeData
-  useEffect(() => {
-    if (writeData) {
-      setTxHash(writeData);
-      if (currentAction === "approve") setStatus("approving");
-      if (currentAction === "deploy") setStatus("deploying");
+  // Handlers
+  const handleApprove = async () => {
+    if (!providerTokenAddress || !walletAddress) {
+      setError("Missing token address or wallet connection");
+      return;
     }
-  }, [writeData, currentAction]);
 
-  // Handle errors
-  useEffect(() => {
-    if (error) {
-      console.error("[useBondingCurveSetup] error", error);
-      setStatus("error");
-    }
-  }, [error]);
-
-  // Handle receipt
-  useEffect(() => {
-    if (!receipt) return;
-    if (receipt.status === "success") {
-      if (currentAction === "approve") {
-        setStatus("approved");
-
-        // Add delay to ensure blockchain state is updated
-        setTimeout(() => {
-          refreshAllowance();
-        }, 2000);
-      } else if (currentAction === "deploy") {
-        setStatus("success");
-        // Trigger a re-check after delay
-        setTimeout(() => {
-          setTxHash((prev) =>
-            prev ? (`${prev}-recheck` as `0x${string}`) : undefined
-          );
-        }, 5000);
-      }
-    } else {
-      setStatus("error");
-    }
-  }, [receipt, currentAction]);
-
-  /* ------------------------------------------------------------------ */
-  /* Helper Functions                                                   */
-  /* ------------------------------------------------------------------ */
-  const refreshAllowance = async () => {
-    if (!providerToken || !address || !publicClient) return;
     try {
-      const newAllowance = await getTokenAllowance(
-        publicClient,
-        providerToken,
-        address,
-        FACTORY_ADDRESS
+      setError(null);
+
+      // Calculate the amount needed (plus small buffer)
+      const amountToApprove =
+        (tokenBalance * BigInt(Number(percentage || "0"))) / BigInt(100);
+      const bufferedAmount =
+        amountToApprove + (amountToApprove * BigInt(5)) / BigInt(100);
+
+      await approveTokens(
+        writeApprove,
+        providerTokenAddress,
+        FACTORY_ADDRESS,
+        bufferedAmount
       );
-      setAllowance(newAllowance);
+      // Transaction is now pending and will be tracked by the useWaitForTransactionReceipt hook
     } catch (err) {
-      console.error("[useBondingCurveSetup] Error refreshing allowance", err);
+      console.error("Error approving tokens:", err);
+      setError(err instanceof Error ? err.message : "Approval failed");
     }
   };
 
-  // Approve handler
-  const handleApprove = useCallback(() => {
-    if (!providerToken) return;
-    // Calculate the exact amount needed for the transaction
-    const pct = Number(percentage || "0");
-    const amountToApprove = (tokenBalance * BigInt(pct)) / BigInt(100);
-    // Add a small buffer (5% more) to avoid edge cases
-    const bufferedAmount =
-      amountToApprove + (amountToApprove * BigInt(5)) / BigInt(100);
+  const handleDeploy = async () => {
+    if (!providerTokenAddress || !walletAddress) {
+      setError("Missing token address or wallet connection");
+      return;
+    }
 
-    setCurrentAction("approve");
-    approveTokens(
-      writeContract,
-      providerToken,
-      FACTORY_ADDRESS,
-      bufferedAmount
-    );
-  }, [providerToken, percentage, tokenBalance, writeContract]);
+    try {
+      setError(null);
 
-  // Deploy handler
-  const handleDeploy = useCallback(() => {
-    if (!providerToken) return;
+      await deployBondingCurveContract(writeDeploy, {
+        providerTokenAddress,
+        initialTokenAmount,
+        slope: fixedSlope,
+        intercept: fixedIntercept,
+      });
+      // Transaction is now pending and will be tracked by the useWaitForTransactionReceipt hook
+    } catch (err) {
+      console.error("Error deploying bonding curve:", err);
+      setError(err instanceof Error ? err.message : "Deployment failed");
+    }
+  };
 
-    const pct = Number(percentage || "0");
-    const initialTokenAmount = (tokenBalance * BigInt(pct)) / BigInt(100);
+  // Processing states
+  const isApproving = isApprovePending || isApproveTxConfirming;
+  const isDeploying = isDeployPending || isDeployTxConfirming;
+  const isProcessing = isApproving || isDeploying;
 
-    setCurrentAction("deploy");
-    deployBondingCurveContract(writeContract, {
-      providerTokenAddress: providerToken,
-      initialTokenAmount,
-      slope: fixedSlope,
-      intercept: fixedIntercept,
-    });
-  }, [providerToken, percentage, tokenBalance, writeContract]);
-
-  /* ------------------------------------------------------------------ */
-  /* Derived helpers for UI                                             */
-  /* ------------------------------------------------------------------ */
-  const initialTokenAmountDerived =
-    (tokenBalance * BigInt(Number(percentage || "0"))) / BigInt(100);
-
-  const allowanceEnough = allowance >= initialTokenAmountDerived;
-
-  const formattedBalance = formatEther(tokenBalance).split(".")[0];
-  const formattedInitialAmount = formatEther(initialTokenAmountDerived).split(
-    "."
-  )[0];
-
-  const allowanceDisplay =
-    allowance > maxUint256 - BigInt("10000000000000000000000000")
-      ? "Unlimited"
-      : formatEther(allowance).split(".")[0];
+  // Use network errors if available
+  useEffect(() => {
+    if (approveError && isApproveError) {
+      setError(approveError.message || "Approval failed");
+    } else if (deployError && isDeployError) {
+      setError(deployError.message || "Deployment failed");
+    }
+  }, [approveError, isApproveError, deployError, isDeployError]);
 
   return {
-    providerToken,
+    // States
     percentage,
     setPercentage,
+    tokenBalance,
+    allowance,
+    isLoading,
+    error,
+    contextLoading,
+    isOwner,
+    bondingCurveAddress,
+    providerTokenAddress,
+
+    // Computed values
+    initialTokenAmount,
+    allowanceEnough,
     formattedBalance,
     formattedInitialAmount,
-    allowanceEnough,
-    allowanceDisplay,
-    status,
-    isPending,
-    isWaitingReceipt,
-    existingBondingCurve,
-    bondingCurveAddress,
-    checkingExistence,
+    fixedSlope,
+    fixedIntercept,
+
+    // Transaction states
+    isApproving,
+    isDeploying,
+    isProcessing,
+    isApproveTxConfirming,
+    isApproveTxConfirmed,
+    isDeployTxConfirming,
+    isDeployTxConfirmed,
+    isDeployPending,
+    isApprovePending,
+
+    // Handlers
     handleApprove,
     handleDeploy,
+
+    // Utilities
+    shorten,
   };
 }

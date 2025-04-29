@@ -59,7 +59,7 @@ export default function TokenList({
                       }
                       className="text-sm border border-blue-800 hover:border-blue-500 px-3 py-1 rounded text-blue-300 hover:text-blue-100 transition-colors duration-150"
                     >
-                      launch service with this token
+                      deploy bonding curve
                       {/* or "deploy bonding curve" if separate page */}
                     </button>
                   ) : (

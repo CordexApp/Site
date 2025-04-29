@@ -1,68 +1,131 @@
 "use client";
 
-import { useState } from "react";
-import { useServiceLaunch } from "@/context/ServiceLaunchContext";
+import { useState, useEffect } from "react";
+import {
+  useAccount,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
+import { useManageService } from "@/context/ManageServiceContext";
+import { setContractActive } from "@/services/contractServices";
 
 export default function ContractActivation() {
   const [error, setError] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [transactionComplete, setTransactionComplete] = useState(false);
+  const { writeContract, data: txHash, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: txConfirmed } =
+    useWaitForTransactionReceipt({
+      hash: txHash,
+      confirmations: 1,
+    });
+  const { address: walletAddress } = useAccount();
 
   const {
-    deploymentStatus,
-    contractAddresses,
-    activateContract,
-    activationStatus, // Use the status from the hook
-  } = useServiceLaunch();
+    providerContractAddress,
+    providerContractDetails,
+    ownerAddress,
+    refreshData,
+  } = useManageService();
 
-  const handleActivate = async () => {
-    if (!contractAddresses.providerContract) {
+  // Check if the current user is the owner
+  const isOwner = ownerAddress === walletAddress;
+
+  // Get contract status
+  const isActive = providerContractDetails?.isActive;
+
+  // Monitor transaction status and refresh data when confirmed
+  useEffect(() => {
+    if (txConfirmed) {
+      setTransactionComplete(true);
+      refreshData();
+    }
+  }, [txConfirmed, refreshData]);
+
+  useEffect(() => {
+    // Reset local state if contract address changes
+    setError("");
+    setIsProcessing(false);
+    setTransactionComplete(false);
+  }, [providerContractAddress]);
+
+  const handleStatusChange = async (newStatus: boolean) => {
+    if (!providerContractAddress) {
       setError("No contract address available");
       return;
     }
 
     try {
-      await activateContract(contractAddresses.providerContract);
+      setError("");
+      setTransactionComplete(false);
+
+      // Call the setContractStatus function
+      await setContractActive(
+        writeContract,
+        providerContractAddress,
+        newStatus
+      );
+
+      // The transaction is now pending, and will be monitored by the useWaitForTransactionReceipt hook
     } catch (err) {
-      console.error("Contract activation failed:", err);
-      setError(err instanceof Error ? err.message : "Activation failed");
+      console.error("Contract status change failed:", err);
+      setError(err instanceof Error ? err.message : "Status change failed");
+      setIsProcessing(false);
     }
   };
 
-  if (deploymentStatus !== "success") return null;
+  // Only show if we have contract details and the user is the owner
+  if (!providerContractDetails || !isOwner) {
+    return null;
+  }
+
+  // Derive processing state from wagmi hooks
+  const isProcessingTx = isPending || isConfirming;
 
   return (
     <div className="mt-8 border border-gray-700 rounded-lg p-4">
-      <h2 className="text-xl mb-4">Contract Activation</h2>
+      <h2 className="text-xl mb-4">Contract Status Management</h2>
       <p className="mb-4 text-sm">
-        Your contract has been deployed but needs to be activated.
+        {isActive
+          ? "Your contract is currently active. You can deactivate it if needed."
+          : "Your contract is inactive. Activate it to allow token generation."}
       </p>
 
-      {activationStatus === "success" ? (
+      {transactionComplete ? (
         <div className="bg-green-900/20 border border-green-700 p-3 rounded-md text-green-400 mb-4">
-          Contract successfully activated!
+          Contract status successfully changed!
         </div>
-      ) : activationStatus === "error" ? (
+      ) : error ? (
         <div className="bg-red-900/20 border border-red-700 p-3 rounded-md text-red-400 mb-4">
-          {error || "Failed to activate contract"}
+          {error}
+        </div>
+      ) : isConfirming ? (
+        <div className="bg-blue-900/20 border border-blue-700 p-3 rounded-md text-blue-400 mb-4">
+          Waiting for transaction confirmation...
+        </div>
+      ) : isPending ? (
+        <div className="bg-blue-900/20 border border-blue-700 p-3 rounded-md text-blue-400 mb-4">
+          Transaction pending...
         </div>
       ) : null}
 
       <button
-        disabled={
-          activationStatus === "pending" || activationStatus === "success"
-        }
-        onClick={handleActivate}
+        disabled={isProcessingTx}
+        onClick={() => handleStatusChange(!isActive)}
         className={`w-full py-3 px-4 rounded-md ${
-          activationStatus === "success"
-            ? "bg-green-800 cursor-not-allowed"
-            : activationStatus === "pending"
+          isProcessingTx
             ? "bg-blue-800 cursor-wait"
+            : isActive
+            ? "bg-red-700 hover:bg-red-600"
             : "bg-blue-700 hover:bg-blue-600"
         } transition-colors`}
       >
-        {activationStatus === "pending"
-          ? "Activating..."
-          : activationStatus === "success"
-          ? "Contract Activated"
+        {isProcessingTx
+          ? isConfirming
+            ? "Confirming..."
+            : "Processing..."
+          : isActive
+          ? "Deactivate Contract"
           : "Activate Contract"}
       </button>
     </div>

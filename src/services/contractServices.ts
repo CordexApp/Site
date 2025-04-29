@@ -1,125 +1,23 @@
 // Contract services for Cordex service deployment
-import { parseEther } from "viem";
+import { parseEther, formatEther } from "viem";
 import {
   useWriteContract,
   useWaitForTransactionReceipt,
   usePublicClient,
 } from "wagmi";
 
+// Import ABIs
+import { ContractFactoryAbi } from "@/abis/ContractFactory";
+import { ProviderContractAbi } from "@/abis/ProviderContract";
+
 // ContractFactory configuration
 export const contractConfig = {
   address: "0xca38c4d7889d7337ceea5c53db82f70f12a7b9e7" as `0x${string}`,
-  abi: [
-    {
-      inputs: [
-        { name: "apiEndpoint", type: "string" },
-        { name: "maxEscrow", type: "uint256" },
-        { name: "tokenName", type: "string" },
-        { name: "tokenSymbol", type: "string" },
-      ],
-      name: "deployProviderContract",
-      outputs: [{ name: "", type: "address" }],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-    {
-      inputs: [{ name: "provider", type: "address" }],
-      name: "getProviderContract",
-      outputs: [{ name: "", type: "address" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [{ name: "provider", type: "address" }],
-      name: "getProviderToken",
-      outputs: [{ name: "", type: "address" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [{ name: "provider", type: "address" }],
-      name: "getProviderContracts",
-      outputs: [{ name: "", type: "address[]" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [{ name: "provider", type: "address" }],
-      name: "getProviderTokens",
-      outputs: [{ name: "", type: "address[]" }],
-      stateMutability: "view",
-      type: "function",
-    },
-    {
-      inputs: [
-        { name: "providerTokenAddress", type: "address" },
-        { name: "initialTokenAmount", type: "uint256" },
-        { name: "slope", type: "uint256" },
-        { name: "intercept", type: "uint256" },
-      ],
-      name: "deployBondingCurveContract",
-      outputs: [{ name: "", type: "address" }],
-      stateMutability: "nonpayable",
-      type: "function",
-    },
-  ] as const,
+  abi: ContractFactoryAbi,
 };
 
 // Provider contract ABI
-export const providerContractAbi = [
-  {
-    inputs: [
-      { name: "amount", type: "uint256" },
-      { name: "userNonce", type: "uint256" },
-    ],
-    name: "generateToken",
-    outputs: [{ name: "", type: "bytes32" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "maxEscrow",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "apiEndpoint",
-    outputs: [{ name: "", type: "string" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "tokenHash", type: "bytes32" }],
-    name: "isTokenValid",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "isActive",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "provider",
-    outputs: [{ name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "_isActive", type: "bool" }],
-    name: "setContractStatus",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-] as const;
+export const providerContractAbi = ProviderContractAbi;
 
 // Used to extract contract addresses from transaction receipt
 export const extractContractAddressFromReceipt = (
