@@ -1,13 +1,16 @@
 import { useState, useRef, ChangeEvent } from "react";
+import { InputLabel } from "./ui/InputLabel";
 
 interface ImageUploaderProps {
   onImageSelected: (file: File | null) => void;
   imagePreview: string | null;
+  label?: string;
 }
 
 export default function ImageUploader({
   onImageSelected,
   imagePreview,
+  label = "service image",
 }: ImageUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -19,17 +22,17 @@ export default function ImageUploader({
 
   return (
     <div>
-      <label className="block text-sm mb-1">service image</label>
+      <InputLabel>{label}</InputLabel>
       <div className="flex items-center space-x-4">
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="px-4 py-2 border border-gray-700 hover:border-white transition-colors"
+          className="px-4 py-2 text-gray-700 hover:text-white focus:text-white active:text-white transition-colors"
         >
-          {imagePreview ? "change image" : "select image"}
+          [ {imagePreview ? "change image" : "select image"} ]
         </button>
         {imagePreview && (
-          <div className="relative w-16 h-16 overflow-hidden">
+          <div className="relative w-16 h-16 overflow-hidden border border-white">
             <img
               src={imagePreview}
               alt="Preview"

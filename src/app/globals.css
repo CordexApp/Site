@@ -17,3 +17,18 @@ body {
   color: var(--foreground);
   font-family: "Source Code Pro", monospace;
 }
+
+@layer base {
+  h1 {
+    @apply text-4xl font-bold mb-2;
+  }
+  h2 {
+    @apply text-3xl font-semibold mb-2;
+  }
+  h3 {
+    @apply text-xl font-semibold mb-2;
+  }
+  h4 {
+    @apply text-lg font-semibold mb-2;
+  }
+}

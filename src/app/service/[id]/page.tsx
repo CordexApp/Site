@@ -3,10 +3,10 @@ import { ServiceProvider } from "@/context/ServiceContext";
 import { SecondaryButton } from "@/components/ui/SecondaryButton";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import ServiceRequestFormWrapper from "@/components/ServiceRequestFormWrapper";
-import ServiceHealthWrapper from "@/components/ServiceHealthWrapper";
-import ContractStatusWrapper from "@/components/ContractStatusWrapper";
-import ContractMaxEscrowWrapper from "@/components/ContractMaxEscrowWrapper";
+import ServiceRequestForm from "@/components/ServiceRequestForm";
+import ServiceHealthIndicator from "@/components/ServiceHealthIndicator";
+import ContractStatusIndicator from "@/components/ContractStatusIndicator";
+import ContractMaxEscrowIndicator from "@/components/ContractMaxEscrowIndicator";
 
 interface ServicePageProps {
   params: {
@@ -21,6 +21,9 @@ export default async function ServicePage({ params }: ServicePageProps) {
   if (!service) {
     notFound();
   }
+
+  const endpoint = service.endpoint || "";
+  const contractAddress = service.provider_contract_address || "";
 
   return (
     <ServiceProvider initialService={service}>
@@ -47,20 +50,46 @@ export default async function ServicePage({ params }: ServicePageProps) {
 
             <div className="flex flex-col space-y-3">
               <div className="flex items-center">
-                <p className="text-gray-400 mr-4">
-                  Endpoint: {service.endpoint}
-                </p>
-                <ServiceHealthWrapper />
+                <p className="text-gray-400 mr-4">Endpoint: {endpoint}</p>
+                {endpoint ? (
+                  <ServiceHealthIndicator endpoint={endpoint} />
+                ) : (
+                  <div className="flex items-center">
+                    <div className="h-3 w-3 rounded-full bg-gray-400 mr-2"></div>
+                    <span className="text-sm text-gray-400">
+                      No endpoint available
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center">
                 <p className="text-gray-400 mr-4">Contract:</p>
-                <ContractStatusWrapper />
+                {contractAddress ? (
+                  <ContractStatusIndicator contractAddress={contractAddress} />
+                ) : (
+                  <div className="flex items-center">
+                    <div className="h-3 w-3 rounded-full bg-gray-400 mr-2"></div>
+                    <span className="text-sm text-gray-400">
+                      No contract linked
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center">
                 <p className="text-gray-400 mr-4">Escrow:</p>
-                <ContractMaxEscrowWrapper />
+                {contractAddress ? (
+                  <ContractMaxEscrowIndicator
+                    contractAddress={contractAddress}
+                  />
+                ) : (
+                  <div className="flex items-center">
+                    <span className="text-sm text-gray-400">
+                      No contract linked
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -73,7 +102,19 @@ export default async function ServicePage({ params }: ServicePageProps) {
             </div>
 
             <div className="w-full border-t border-gray-700 pt-6">
-              <ServiceRequestFormWrapper />
+              {endpoint && contractAddress ? (
+                <ServiceRequestForm
+                  serviceName={service.name}
+                  endpoint={endpoint}
+                  providerContractAddress={contractAddress}
+                />
+              ) : (
+                <div className="p-4 bg-gray-800 rounded border border-gray-700">
+                  <p className="text-yellow-400">
+                    Service not properly configured for API requests
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -4,3 +4,7 @@ export { Link } from "./Link";
 export { Grid } from "./Grid";
 export { ServiceCard } from "./ServiceCard";
 export * from "./LoadingDots";
+export { TypedText } from "./TypedText";
+export { Input } from "./Input";
+export { InputLabel } from "./InputLabel";
+export { NumericInput } from "./NumericInput";
