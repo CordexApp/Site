@@ -14,6 +14,11 @@ import {
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import { formatEther, parseEther } from "viem";
+import {
+  getOHLCVData,
+  getAvailableTimeframes,
+  OHLCVCandle,
+} from "@/services/tradingDataService";
 
 interface TokenInfo {
   address: `0x${string}` | null;
@@ -68,6 +73,17 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Chart state
+  const [chartData, setChartData] = useState<OHLCVCandle[]>([]);
+  const [chartTimeframe, setChartTimeframe] = useState<string>("1h");
+  const [availableTimeframes, setAvailableTimeframes] = useState<string[]>([
+    "1h",
+  ]);
+  const [isChartLoading, setIsChartLoading] = useState<boolean>(false);
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"buy" | "sell">("buy");
 
   const publicClient = usePublicClient();
   const { address: walletAddress } = useAccount();
@@ -179,6 +195,49 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
         err
       );
     }
+  };
+
+  // Function to fetch chart data
+  const fetchChartData = async () => {
+    if (!bondingCurveAddress) return;
+
+    setIsChartLoading(true);
+
+    try {
+      // Fetch the available timeframes first
+      const timeframes = await getAvailableTimeframes(bondingCurveAddress);
+      if (timeframes.length > 0) {
+        setAvailableTimeframes(timeframes);
+
+        // If current timeframe is not available, use the first one
+        if (!timeframes.includes(chartTimeframe)) {
+          setChartTimeframe(timeframes[0]);
+        }
+      }
+
+      // Fetch the OHLCV data
+      const response = await getOHLCVData(
+        bondingCurveAddress,
+        chartTimeframe,
+        1000 // Limit to 1000 candles
+      );
+
+      if (response.candles.length > 0) {
+        setChartData(response.candles);
+      } else {
+        setChartData([]);
+      }
+    } catch (error) {
+      console.error("Error fetching chart data:", error);
+      setChartData([]);
+    } finally {
+      setIsChartLoading(false);
+    }
+  };
+
+  // Handle timeframe change
+  const handleTimeframeChange = (timeframe: string) => {
+    setChartTimeframe(timeframe);
   };
 
   useEffect(() => {
@@ -360,6 +419,13 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
       setError(null);
     };
   }, [providerContractAddress, publicClient, walletAddress]);
+
+  // Fetch chart data when bonding curve address or timeframe changes
+  useEffect(() => {
+    if (bondingCurveAddress) {
+      fetchChartData();
+    }
+  }, [bondingCurveAddress, chartTimeframe]);
 
   // Handlers for buy amount changes
   const handleBuyAmountChange = async (amount: string) => {
@@ -561,6 +627,15 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
     sellState,
     isLoading,
     error,
+    // Chart state
+    chartData,
+    chartTimeframe,
+    availableTimeframes,
+    isChartLoading,
+    // Tab state
+    activeTab,
+    setActiveTab,
+    // Functions
     handleBuyAmountChange,
     handleSellAmountChange,
     approveBuy,
@@ -568,5 +643,6 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
     executeBuy,
     executeSell,
     refreshBondingCurveInfo,
+    handleTimeframeChange,
   };
 }

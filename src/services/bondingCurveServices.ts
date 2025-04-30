@@ -6,9 +6,14 @@ import { ContractFactoryAbi } from "@/abis/ContractFactory";
 import { ERC20Abi } from "@/abis/ERC20";
 import { BondingCurveAbi } from "@/abis/BondingCurveContract";
 
-// Factory contract address (same as contractServices)
-export const FACTORY_ADDRESS =
-  "0xaa0c84e338e8e1b1086b2f002a33306d2a2182b1" as `0x${string}`;
+// Factory contract address
+const factoryAddressEnv = process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
+if (!factoryAddressEnv) {
+  throw new Error(
+    "NEXT_PUBLIC_FACTORY_ADDRESS environment variable is not set."
+  );
+}
+export const FACTORY_ADDRESS = factoryAddressEnv as `0x${string}`;
 
 // Minimal ABI for ContractFactory (Use imported ABI)
 export const factoryAbi = ContractFactoryAbi;

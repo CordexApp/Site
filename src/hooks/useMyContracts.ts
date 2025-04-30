@@ -13,8 +13,14 @@ import {
 
 // --- Constants & ABIs ---
 
-const factoryAddress =
-  "0xaa0c84e338e8e1b1086b2f002a33306d2a2182b1" as `0x${string}`;
+// Factory contract address
+const factoryAddressEnv = process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
+if (!factoryAddressEnv) {
+  throw new Error(
+    "NEXT_PUBLIC_FACTORY_ADDRESS environment variable is not set."
+  );
+}
+export const factoryAddress = factoryAddressEnv as `0x${string}`;
 
 // Factory ABI (partial)
 const factoryAbi = [
