@@ -7,6 +7,7 @@ import ServiceRequestForm from "@/components/ServiceRequestForm";
 import ServiceHealthIndicator from "@/components/ServiceHealthIndicator";
 import ContractStatusIndicator from "@/components/ContractStatusIndicator";
 import ContractMaxEscrowIndicator from "@/components/ContractMaxEscrowIndicator";
+import TokenDashboard from "@/components/TokenDashboard";
 
 interface ServicePageProps {
   params: {
@@ -116,6 +117,14 @@ export default async function ServicePage({ params }: ServicePageProps) {
                 </div>
               )}
             </div>
+
+            {contractAddress && (
+              <div className="mt-8">
+                <TokenDashboard
+                  providerContractAddress={contractAddress as `0x${string}`}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

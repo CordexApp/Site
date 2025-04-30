@@ -83,6 +83,13 @@ function ManageServiceContent() {
         </p>
       )}
 
+      {providerTokenAddress && (
+        <p>
+          <span className="text-gray-400">token address:</span>{" "}
+          <CopyableHash hash={providerTokenAddress} />
+        </p>
+      )}
+
       <p>
         <span className="text-gray-400">escrow amount:</span>{" "}
         <span className="text-sm">
