@@ -124,10 +124,10 @@ export default function ServiceHealthIndicator({
 
   if (isLoading && !healthStatus) {
     return (
-      <div className="flex items-center">
-        <div className="h-3 w-3 rounded-full bg-gray-400 mr-2"></div>
-        <span className="text-sm text-gray-400">Checking...</span>
-      </div>
+      <span className="flex items-center">
+        <span className="h-3 w-3 rounded-full bg-gray-400 mr-2"></span>
+        <span className="text-sm text-gray-400">checking...</span>
+      </span>
     );
   }
 
@@ -136,14 +136,14 @@ export default function ServiceHealthIndicator({
   }
 
   return (
-    <div className="flex items-center group relative">
-      <div
+    <span className="flex items-center">
+      <span
         className={`h-3 w-3 rounded-full ${
           healthStatus.isHealthy ? "bg-green-500" : "bg-red-500"
         } mr-2`}
-      ></div>
-      <span className="text-sm text-gray-300">
-        {healthStatus.isHealthy ? "Service online" : "Service offline"}
+      ></span>
+      <span className="">
+        {healthStatus.isHealthy ? "healthy" : "unhealthy"}
       </span>
 
       {/* Tooltip with detailed health info */}
@@ -166,6 +166,6 @@ export default function ServiceHealthIndicator({
           <p className="text-gray-300 mt-1">{healthStatus.message}</p>
         )}
       </div>
-    </div>
+    </span>
   );
 }

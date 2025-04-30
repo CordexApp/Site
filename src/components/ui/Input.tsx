@@ -8,11 +8,11 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, ...props }, ref) => {
     return (
-      <div className="space-y-1">
+      <div className="flex flex-col space-y-2">
         {label && <InputLabel>{label}</InputLabel>}
         <input
           ref={ref}
-          className={`w-full px-4 py-2 placeholder:text-gray-700 bg-transparent border-b border-gray-700 focus:border-white transition-colors rounded-none focus:outline-none ${
+          className={`px-4 py-2 placeholder:text-gray-700 bg-transparent border-b border-gray-700 focus:border-white transition-colors rounded-none focus:outline-none ${
             className || ""
           }`}
           {...props}

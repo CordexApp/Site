@@ -88,10 +88,10 @@ export default function ContractStatusIndicator({
 
   if (isLoading && !status) {
     return (
-      <div className="flex items-center">
-        <div className="h-3 w-3 rounded-full bg-gray-400 mr-2"></div>
-        <span className="text-sm text-gray-400">Checking contract...</span>
-      </div>
+      <span className="flex items-center">
+        <span className="h-3 w-3 rounded-full bg-gray-400 mr-2"></span>
+        <span className="text-sm text-gray-400">checking contract...</span>
+      </span>
     );
   }
 
@@ -100,39 +100,39 @@ export default function ContractStatusIndicator({
   }
 
   return (
-    <div className="flex items-center group relative">
-      <div
+    <span className="flex items-center">
+      <span
         className={`h-3 w-3 rounded-full ${
           status.isActive ? "bg-green-500" : "bg-red-500"
         } mr-2`}
-      ></div>
-      <span className="text-sm text-gray-300">
-        {status.isActive ? "Contract active" : "Contract inactive"}
+      ></span>
+      <span className="">
+        {status.isActive ? "contract active" : "contract inactive"}
       </span>
 
       {/* Tooltip with detailed status info */}
-      <div
+      <span
         className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-gray-800 border border-gray-700 rounded-md shadow-lg 
                     text-xs opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-10"
       >
         <p className="font-semibold mb-1">
-          {status.isActive ? "Contract is active" : "Contract is inactive"}
+          {status.isActive ? "contract is active" : "contract is inactive"}
         </p>
         <p className="text-gray-300">
-          Last checked: {status.lastChecked.toLocaleTimeString()}
+          last checked: {status.lastChecked.toLocaleTimeString()}
         </p>
         {status.provider && (
           <p className="text-gray-300 mt-1 break-all">
-            Provider: {status.provider}
+            provider: {status.provider}
           </p>
         )}
         {!status.isActive && (
           <p className="text-yellow-400 mt-1">
-            You cannot interact with this contract until the provider activates
+            you cannot interact with this contract until the provider activates
             it.
           </p>
         )}
-      </div>
-    </div>
+      </span>
+    </span>
   );
 }

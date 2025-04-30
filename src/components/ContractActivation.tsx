@@ -8,11 +8,11 @@ import {
 } from "wagmi";
 import { useManageService } from "@/context/ManageServiceContext";
 import { setContractActive } from "@/services/contractServices";
+import { PrimaryButton } from "./ui/PrimaryButton";
+import { LoadingDots } from "./ui/LoadingDots";
 
 export default function ContractActivation() {
   const [error, setError] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [transactionComplete, setTransactionComplete] = useState(false);
   const { writeContract, data: txHash, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: txConfirmed } =
     useWaitForTransactionReceipt({
@@ -37,7 +37,6 @@ export default function ContractActivation() {
   // Monitor transaction status and refresh data when confirmed
   useEffect(() => {
     if (txConfirmed) {
-      setTransactionComplete(true);
       refreshData();
     }
   }, [txConfirmed, refreshData]);
@@ -45,8 +44,6 @@ export default function ContractActivation() {
   useEffect(() => {
     // Reset local state if contract address changes
     setError("");
-    setIsProcessing(false);
-    setTransactionComplete(false);
   }, [providerContractAddress]);
 
   const handleStatusChange = async (newStatus: boolean) => {
@@ -57,20 +54,14 @@ export default function ContractActivation() {
 
     try {
       setError("");
-      setTransactionComplete(false);
-
-      // Call the setContractStatus function
       await setContractActive(
         writeContract,
         providerContractAddress,
         newStatus
       );
-
-      // The transaction is now pending, and will be monitored by the useWaitForTransactionReceipt hook
     } catch (err) {
       console.error("Contract status change failed:", err);
       setError(err instanceof Error ? err.message : "Status change failed");
-      setIsProcessing(false);
     }
   };
 
@@ -83,51 +74,21 @@ export default function ContractActivation() {
   const isProcessingTx = isPending || isConfirming;
 
   return (
-    <div className="mt-8 border border-gray-700 rounded-lg p-4">
-      <h2 className="text-xl mb-4">Contract Status Management</h2>
-      <p className="mb-4 text-sm">
-        {isActive
-          ? "Your contract is currently active. You can deactivate it if needed."
-          : "Your contract is inactive. Activate it to allow token generation."}
-      </p>
+    <div>
+      {error && <div className="text-red-400">{error}</div>}
 
-      {transactionComplete ? (
-        <div className="bg-green-900/20 border border-green-700 p-3 rounded-md text-green-400 mb-4">
-          Contract status successfully changed!
-        </div>
-      ) : error ? (
-        <div className="bg-red-900/20 border border-red-700 p-3 rounded-md text-red-400 mb-4">
-          {error}
-        </div>
-      ) : isConfirming ? (
-        <div className="bg-blue-900/20 border border-blue-700 p-3 rounded-md text-blue-400 mb-4">
-          Waiting for transaction confirmation...
-        </div>
-      ) : isPending ? (
-        <div className="bg-blue-900/20 border border-blue-700 p-3 rounded-md text-blue-400 mb-4">
-          Transaction pending...
-        </div>
-      ) : null}
-
-      <button
-        disabled={isProcessingTx}
+      <PrimaryButton
         onClick={() => handleStatusChange(!isActive)}
-        className={`w-full py-3 px-4 rounded-md ${
-          isProcessingTx
-            ? "bg-blue-800 cursor-wait"
-            : isActive
-            ? "bg-red-700 hover:bg-red-600"
-            : "bg-blue-700 hover:bg-blue-600"
-        } transition-colors`}
+        disabled={isProcessingTx}
       >
-        {isProcessingTx
-          ? isConfirming
-            ? "Confirming..."
-            : "Processing..."
-          : isActive
-          ? "Deactivate Contract"
-          : "Activate Contract"}
-      </button>
+        {isProcessingTx ? (
+          <LoadingDots text={isPending ? "Processing" : "Confirming"} />
+        ) : isActive ? (
+          "Deactivate"
+        ) : (
+          "Activate"
+        )}
+      </PrimaryButton>
     </div>
   );
 }

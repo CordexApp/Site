@@ -19,7 +19,7 @@ export function PrimaryButton({
   disabled = false,
 }: ButtonProps) {
   const baseClasses =
-    "px-4 py-2 border border-white text-white font-medium hover:bg-white hover:text-black transition-colors";
+    "px-4 py-2 border border-white text-white font-medium hover:bg-white hover:text-black transition-colors cursor-pointer";
   const classes = `${baseClasses} ${
     disabled ? "opacity-50 cursor-not-allowed" : ""
   } ${className}`;

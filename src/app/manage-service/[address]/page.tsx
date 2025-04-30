@@ -9,6 +9,9 @@ import ContractActivation from "@/components/ContractActivation";
 import BondingCurveSetup from "@/components/BondingCurveSetup";
 import { LoadingDots } from "@/components/ui/LoadingDots";
 import { TypedText } from "@/components/ui/TypedText";
+import { CopyableHash } from "@/components/ui/CopyableHash";
+import ServiceHealthIndicator from "@/components/ServiceHealthIndicator";
+import ContractStatusIndicator from "@/components/ContractStatusIndicator";
 
 // Inner component that uses the context
 function ManageServiceContent() {
@@ -22,6 +25,11 @@ function ManageServiceContent() {
     providerTokenInfo,
     bondingCurveAddress,
   } = useManageService();
+
+  // Format maxEscrow from bigint to a readable string
+  const escrowAmount = providerContractDetails?.maxEscrow
+    ? (Number(providerContractDetails.maxEscrow) / 10 ** 18).toString()
+    : null;
 
   if (isLoading) {
     return (
@@ -40,58 +48,68 @@ function ManageServiceContent() {
   }
 
   return (
-    <div className="mt-8">
-      <div className="mb-8 pb-6 border-b border-gray-700">
-        <h2 className="text-2xl font-bold mb-4">Service Details</h2>
-        <p className="mb-2">
-          <span className="text-gray-400">Provider Contract:</span>{" "}
-          {providerContractAddress}
-        </p>
-        <p className="mb-2">
-          <span className="text-gray-400">Owner:</span>{" "}
-          {ownerAddress || "Unknown"}
-        </p>
-        {providerContractDetails && (
-          <>
-            <p className="mb-2">
-              <span className="text-gray-400">API Endpoint:</span>{" "}
-              {providerContractDetails.apiEndpoint || "Not set"}
-            </p>
-            <p className="mb-2">
-              <span className="text-gray-400">Max Escrow:</span>{" "}
-              {providerContractDetails.maxEscrow
-                ? (
-                    Number(providerContractDetails.maxEscrow) /
-                    10 ** 18
-                  ).toString()
-                : "0"}{" "}
-              CRDX
-            </p>
-            <p className="mb-2">
-              <span className="text-gray-400">Status:</span>{" "}
-              <span
-                className={
-                  providerContractDetails.isActive
-                    ? "text-green-400"
-                    : "text-red-400"
-                }
-              >
-                {providerContractDetails.isActive ? "Active" : "Inactive"}
-              </span>
-            </p>
-          </>
-        )}
-        {providerTokenInfo && (
-          <p className="mb-2">
-            <span className="text-gray-400">Token:</span>{" "}
-            {providerTokenInfo.name} ({providerTokenInfo.symbol})
-          </p>
-        )}
-      </div>
+    <div className="flex flex-col gap-4">
+      <StatusIndicators />
+      <p>
+        <span className="text-gray-400">provider contract:</span>{" "}
+        <CopyableHash hash={providerContractAddress || ""} />
+      </p>
 
+      <p>
+        <span className="text-gray-400">owner:</span>{" "}
+        <CopyableHash hash={ownerAddress || ""} />
+      </p>
+
+      {providerContractDetails?.apiEndpoint && (
+        <p>
+          <span className="text-gray-400">endpoint:</span>{" "}
+          <span>{providerContractDetails.apiEndpoint}</span>
+        </p>
+      )}
+
+      {bondingCurveAddress && (
+        <p>
+          <span className="text-gray-400">bonding curve:</span>{" "}
+          <CopyableHash hash={bondingCurveAddress} />
+        </p>
+      )}
+
+      {providerTokenInfo && (
+        <p>
+          <span className="text-gray-400">token:</span>{" "}
+          <span className="text-sm">
+            {providerTokenInfo.name} ({providerTokenInfo.symbol})
+          </span>
+        </p>
+      )}
+
+      <p>
+        <span className="text-gray-400">escrow amount:</span>{" "}
+        <span className="text-sm">
+          {escrowAmount ? `${escrowAmount} CRDX` : "Not available"}
+        </span>
+      </p>
       {/* Only show these components when service data is loaded */}
       <ContractActivation />
       <BondingCurveSetup />
+    </div>
+  );
+}
+
+function StatusIndicators() {
+  const { providerContractAddress, providerContractDetails } =
+    useManageService();
+
+  return (
+    <div className="flex gap-4 mb-4">
+      {providerContractAddress && (
+        <ContractStatusIndicator contractAddress={providerContractAddress} />
+      )}
+      {providerContractDetails?.apiEndpoint && (
+        <ServiceHealthIndicator
+          endpoint={providerContractDetails.apiEndpoint}
+        />
+      )}
     </div>
   );
 }
@@ -107,11 +125,11 @@ export default function ManageServicePage() {
 
   return (
     <ManageServiceProvider serviceAddress={formattedAddress}>
-      <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] py-12 font-mono bg-black text-white">
+      <div className="">
         <h1 className="">
           <TypedText text="manage your service" />
         </h1>
-        <div className="w-full max-w-lg">
+        <div className="w-full max-w-4xl">
           <ManageServiceContent />
         </div>
       </div>

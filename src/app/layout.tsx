@@ -18,9 +18,9 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Providers>
-          <div className="bg-black text-white px-4 md:px-32">
+          <div className="bg-black min-h-screen text-white px-4 md:px-32">
             <NavigationBar />
-            {children}
+            <div className="mt-16">{children}</div>
           </div>
         </Providers>
       </body>

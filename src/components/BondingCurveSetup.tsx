@@ -2,6 +2,13 @@
 
 import { useBondingCurveSetup } from "@/hooks/useBondingCurveSetup";
 import { formatEther } from "viem";
+import { NumericInput } from "./ui/NumericInput";
+import { PercentageInput } from "./ui/PercentageInput";
+import { CommaFormatter } from "./ui/CommaFormatter";
+import { LoadingDots } from "./ui/LoadingDots";
+import { PrimaryButton } from "./ui/PrimaryButton";
+import { useEffect } from "react";
+import { CopyableHash } from "./ui/CopyableHash";
 
 export default function BondingCurveSetup() {
   const {
@@ -42,6 +49,13 @@ export default function BondingCurveSetup() {
     shorten,
   } = useBondingCurveSetup();
 
+  // Log errors to console
+  useEffect(() => {
+    if (error) {
+      console.log(error);
+    }
+  }, [error]);
+
   // Only show for the owner and if context is loaded
   if (contextLoading || !isOwner) {
     return null;
@@ -50,8 +64,8 @@ export default function BondingCurveSetup() {
   // If checking or loading
   if (isLoading) {
     return (
-      <div className="mt-8 border-t border-gray-700 pt-8">
-        <h2 className="text-2xl font-bold mb-4">Set up Bonding Curve</h2>
+      <div>
+        <h3 className="text-lg font-bold mb-4">Set up Bonding Curve</h3>
         <p>Loading token details...</p>
       </div>
     );
@@ -60,11 +74,10 @@ export default function BondingCurveSetup() {
   // If bonding curve already deployed
   if (bondingCurveAddress || isDeployTxConfirmed) {
     return (
-      <div className="mt-8 border-t border-gray-700 pt-8">
-        <h2 className="text-2xl font-bold mb-4">Bonding Curve Deployed</h2>
+      <div>
         <p className="text-green-400">
           Your bonding curve is active at:{" "}
-          {shorten(bondingCurveAddress || "0x")}
+          <CopyableHash hash={bondingCurveAddress || "0x"} />
         </p>
         <p className="mt-2 text-sm text-gray-400">
           Users can now buy your provider tokens using CRDX through this bonding
@@ -76,77 +89,26 @@ export default function BondingCurveSetup() {
 
   // Otherwise show the setup form
   return (
-    <div className="mt-8 border-t border-gray-700 pt-8">
-      <h2 className="text-2xl font-bold mb-4">Set up Bonding Curve</h2>
+    <div>
+      <h3>Set up Bonding Curve</h3>
 
       {providerTokenAddress ? (
-        <>
-          {/* Display token balance */}
-          <p className="mb-4">Your token balance: {formattedBalance} tokens</p>
-
+        <div className="space-y-4">
           {/* Deposit */}
-          <label className="block mb-2">
-            Deposit to Bonding Curve (% of balance)
-          </label>
-          <input
-            type="number"
-            value={percentage}
-            onChange={(e) => setPercentage(e.target.value)}
-            min="1"
-            max="90"
-            disabled={isProcessing}
-            className={`w-full p-2 mb-1 ${
-              isProcessing ? "bg-gray-600" : "text-black"
-            }`}
-          />
-          <p className="text-sm text-gray-400 mb-4">
-            This will deposit approximately {formattedInitialAmount} tokens into
-            your bonding curve
-          </p>
-
-          {/* Fixed Parameters */}
-          <div className="mb-4 p-3 bg-gray-800 rounded">
-            <h3 className="font-semibold mb-2">
-              Bonding Curve Parameters (Fixed)
-            </h3>
-            <p className="text-sm">Slope: 0.0001 CRDX</p>
-            <p className="text-sm">Intercept: 0.01 CRDX</p>
-            <p className="text-sm text-gray-400 mt-2">
-              These parameters create a fair pricing model for your token
-            </p>
+          <div className="w-64">
+            <PercentageInput
+              value={percentage}
+              label="Deposit to Bonding Curve"
+              onChange={(e) => setPercentage(e.target.value)}
+              min="1"
+              max="99"
+              disabled={isProcessing}
+            />
           </div>
-
-          {/* Status messages */}
-          {isApproveTxConfirming && (
-            <div className="mb-4 p-3 bg-blue-900/20 border border-blue-700 rounded text-blue-400">
-              Confirming token approval...
-            </div>
-          )}
-
-          {isApprovePending && (
-            <div className="mb-4 p-3 bg-blue-900/20 border border-blue-700 rounded text-blue-400">
-              Submitting approval transaction...
-            </div>
-          )}
-
-          {isDeployTxConfirming && (
-            <div className="mb-4 p-3 bg-blue-900/20 border border-blue-700 rounded text-blue-400">
-              Confirming bonding curve deployment...
-            </div>
-          )}
-
-          {isDeployPending && (
-            <div className="mb-4 p-3 bg-blue-900/20 border border-blue-700 rounded text-blue-400">
-              Submitting deployment transaction...
-            </div>
-          )}
-
-          {/* Error display */}
-          {error && !isProcessing && (
-            <div className="mb-4 p-3 bg-red-900/20 border border-red-700 rounded text-red-400">
-              {error}
-            </div>
-          )}
+          <p className="text-sm text-gray-400 mb-4">
+            Deposit <CommaFormatter value={formattedInitialAmount} /> of your{" "}
+            <CommaFormatter value={formattedBalance} /> tokens
+          </p>
 
           {/* Allowance & actions */}
           <p className="mb-4">
@@ -159,41 +121,47 @@ export default function BondingCurveSetup() {
           </p>
 
           {!allowanceEnough && !isDeploying && (
-            <button
-              onClick={handleApprove}
-              disabled={isProcessing}
-              className={`bg-blue-600 px-4 py-2 rounded mr-4 ${
-                isProcessing
-                  ? "opacity-50 cursor-not-allowed"
-                  : "hover:bg-blue-500"
-              }`}
-            >
-              {isApproving
-                ? isApproveTxConfirming
-                  ? "Confirming Approval..."
-                  : "Approving..."
-                : `Approve Factory (allow ${formattedInitialAmount} tokens)`}
-            </button>
+            <>
+              <p className="mb-2">
+                First, allow the factory to use your tokens
+              </p>
+              <PrimaryButton
+                onClick={handleApprove}
+                disabled={isProcessing}
+                className="mr-4"
+              >
+                {isApproving ? (
+                  <LoadingDots
+                    text={isApproveTxConfirming ? "Confirming" : "Approving"}
+                  />
+                ) : (
+                  <>Approve</>
+                )}
+              </PrimaryButton>
+            </>
           )}
 
           {(allowanceEnough || isApproveTxConfirmed) && !isApproving && (
-            <button
-              onClick={handleDeploy}
-              disabled={isProcessing}
-              className={`bg-green-600 px-4 py-2 rounded ${
-                isProcessing
-                  ? "opacity-50 cursor-not-allowed"
-                  : "hover:bg-green-500"
-              }`}
-            >
-              {isDeploying
-                ? isDeployTxConfirming
-                  ? "Confirming Deployment..."
-                  : "Deploying Bonding Curve..."
-                : `Deploy Bonding Curve (${formattedInitialAmount} tokens)`}
-            </button>
+            <>
+              <p className="mb-2">
+                Deploy with <CommaFormatter value={formattedInitialAmount} />{" "}
+                tokens
+              </p>
+              <PrimaryButton onClick={handleDeploy} disabled={isProcessing}>
+                {isDeploying ? (
+                  <LoadingDots
+                    text={isDeployTxConfirming ? "Confirming" : "Deploying"}
+                  />
+                ) : (
+                  <>Deploy</>
+                )}
+              </PrimaryButton>
+            </>
           )}
-        </>
+
+          {/* Error display */}
+          {error && !isProcessing && <div className="text-red-500">Error</div>}
+        </div>
       ) : (
         <p className="text-yellow-400">
           No provider token found. Please ensure your service is deployed
