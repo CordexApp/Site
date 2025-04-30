@@ -1,212 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePublicClient, useAccount } from "wagmi";
-import {
-  findBondingCurveForProviderToken,
-  getProviderTokensForWallet,
-} from "@/services/bondingCurveServices";
-import { getContractProvider } from "@/services/contractServices";
-import { formatEther } from "viem";
+import { useTokenDashboard } from "@/hooks/useTokenDashboard";
+import { useState } from "react";
 
 interface TokenDashboardProps {
   providerContractAddress: `0x${string}`;
 }
 
-interface TokenInfo {
-  address: `0x${string}` | null;
-  name: string | null;
-  symbol: string | null;
-  balance: string | null;
-}
-
 export default function TokenDashboard({
   providerContractAddress,
 }: TokenDashboardProps) {
-  const [ownerAddress, setOwnerAddress] = useState<`0x${string}` | null>(null);
-  const [bondingCurveAddress, setBondingCurveAddress] = useState<
-    `0x${string}` | null
-  >(null);
-  const [tokenInfo, setTokenInfo] = useState<TokenInfo>({
-    address: null,
-    name: null,
-    symbol: null,
-    balance: null,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    ownerAddress,
+    bondingCurveAddress,
+    tokenInfo,
+    bondingCurveInfo,
+    buyState,
+    sellState,
+    isLoading,
+    error,
+    handleBuyAmountChange,
+    handleSellAmountChange,
+    approveBuy,
+    approveSell,
+    executeBuy,
+    executeSell,
+  } = useTokenDashboard(providerContractAddress);
 
-  const publicClient = usePublicClient();
-  const { address: walletAddress } = useAccount();
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
-      setOwnerAddress(null);
-      setBondingCurveAddress(null);
-      setTokenInfo({ address: null, name: null, symbol: null, balance: null });
-
-      try {
-        if (!publicClient) {
-          throw new Error("Public client not available");
-        }
-
-        console.log(
-          `[TokenDashboard] Fetching data for provider contract: ${providerContractAddress}`
-        );
-
-        // Step 1: Get the owner address from the provider contract
-        const fetchedOwnerAddress = await getContractProvider(
-          publicClient,
-          providerContractAddress
-        );
-
-        if (!fetchedOwnerAddress) {
-          throw new Error(
-            `Failed to get contract owner for ${providerContractAddress}`
-          );
-        }
-        setOwnerAddress(fetchedOwnerAddress);
-        console.log(
-          `[TokenDashboard] Found owner address: ${fetchedOwnerAddress}`
-        );
-
-        // Step 2: Get provider tokens associated with the owner from the factory
-        const providerTokens = await getProviderTokensForWallet(
-          publicClient,
-          fetchedOwnerAddress
-        );
-        console.log(
-          `[TokenDashboard] Found provider tokens for owner:`,
-          providerTokens
-        );
-
-        if (!providerTokens || providerTokens.length === 0) {
-          console.log(
-            "[TokenDashboard] No provider tokens found for this owner."
-          );
-          // If no tokens, can't proceed to find token details or bonding curve
-          setIsLoading(false);
-          return;
-        }
-
-        // Select the relevant token (assuming the last one is the most recent/relevant, like in ManageServiceContext)
-        const tokenAddress = providerTokens[providerTokens.length - 1];
-        console.log(`[TokenDashboard] Selected token address: ${tokenAddress}`);
-
-        // Step 3: Get token details (name, symbol, balance)
-        let currentTokenInfo: TokenInfo = {
-          address: tokenAddress,
-          name: null,
-          symbol: null,
-          balance: null,
-        };
-
-        try {
-          console.log(
-            `[TokenDashboard] Fetching details for token: ${tokenAddress}`
-          );
-          const [tokenName, tokenSymbol] = await Promise.all([
-            publicClient.readContract({
-              address: tokenAddress,
-              abi: [
-                {
-                  name: "name",
-                  type: "function",
-                  stateMutability: "view",
-                  inputs: [],
-                  outputs: [{ type: "string", name: "" }],
-                },
-              ],
-              functionName: "name",
-            }) as Promise<string>,
-            publicClient.readContract({
-              address: tokenAddress,
-              abi: [
-                {
-                  name: "symbol",
-                  type: "function",
-                  stateMutability: "view",
-                  inputs: [],
-                  outputs: [{ type: "string", name: "" }],
-                },
-              ],
-              functionName: "symbol",
-            }) as Promise<string>,
-          ]);
-
-          currentTokenInfo.name = tokenName || null;
-          currentTokenInfo.symbol = tokenSymbol || null;
-          console.log(
-            `[TokenDashboard] Token details: Name=${tokenName}, Symbol=${tokenSymbol}`
-          );
-
-          if (walletAddress) {
-            console.log(
-              `[TokenDashboard] Fetching balance for wallet: ${walletAddress}`
-            );
-            const balanceBigInt = (await publicClient.readContract({
-              address: tokenAddress,
-              abi: [
-                {
-                  name: "balanceOf",
-                  type: "function",
-                  stateMutability: "view",
-                  inputs: [{ type: "address", name: "account" }],
-                  outputs: [{ type: "uint256", name: "" }],
-                },
-              ],
-              functionName: "balanceOf",
-              args: [walletAddress],
-            })) as bigint;
-            currentTokenInfo.balance = formatEther(balanceBigInt);
-            console.log(
-              `[TokenDashboard] Wallet balance: ${currentTokenInfo.balance}`
-            );
-          }
-        } catch (err) {
-          console.error("[TokenDashboard] Error fetching token details:", err);
-          // Keep token address, but mark other details as failed/null
-        }
-
-        setTokenInfo(currentTokenInfo);
-
-        // Step 4: Find the bonding curve using owner and token address
-        console.log(
-          `[TokenDashboard] Finding bonding curve for owner ${fetchedOwnerAddress} and token ${tokenAddress}`
-        );
-        const bondingCurve = await findBondingCurveForProviderToken(
-          publicClient,
-          fetchedOwnerAddress,
-          tokenAddress
-        );
-        setBondingCurveAddress(bondingCurve);
-        console.log(
-          `[TokenDashboard] Found bonding curve address: ${bondingCurve}`
-        );
-      } catch (err) {
-        console.error("[TokenDashboard] Error fetching dashboard data:", err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load token information"
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (providerContractAddress && publicClient) {
-      fetchData();
-    }
-
-    return () => {
-      // Cleanup logic if needed when dependencies change or component unmounts
-      setIsLoading(true);
-      setError(null);
-    };
-  }, [providerContractAddress, publicClient, walletAddress]);
+  const [activeTab, setActiveTab] = useState<"buy" | "sell">("buy");
 
   if (isLoading) {
     return (
@@ -226,11 +47,17 @@ export default function TokenDashboard({
     );
   }
 
+  // Calculate if the user has sufficient balance to sell
+  const hasInsufficientTokenBalance = () => {
+    if (!tokenInfo.balance || !sellState.amount) return false;
+    return Number(sellState.amount) > Number(tokenInfo.balance);
+  };
+
   return (
     <div className="mt-8 p-4 bg-gray-800 rounded border border-gray-700">
       <h2 className="text-xl font-semibold mb-4">Token Information</h2>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div>
           <h3 className="text-lg font-medium text-gray-300">
             Provider Contract
@@ -268,7 +95,7 @@ export default function TokenDashboard({
                   {tokenInfo.symbol || "tokens"}
                 </p>
               )}
-              {!walletAddress && tokenInfo.address && (
+              {tokenInfo.balance === null && tokenInfo.address && (
                 <p className="text-yellow-400 text-sm mt-2">
                   Connect your wallet to view token balance
                 </p>
@@ -284,13 +111,204 @@ export default function TokenDashboard({
         <div>
           <h3 className="text-lg font-medium text-gray-300">Bonding Curve</h3>
           {bondingCurveAddress ? (
-            <p className="text-gray-400 break-words">{bondingCurveAddress}</p>
+            <div>
+              <p className="text-gray-400 break-words mb-2">
+                {bondingCurveAddress}
+              </p>
+              <div className="bg-gray-700 p-3 rounded-md mt-2">
+                <p className="text-gray-300 mb-1">
+                  <span className="font-medium">Current Price:</span>{" "}
+                  {Number(bondingCurveInfo.currentPrice).toFixed(6)} CORDEX
+                </p>
+                <p className="text-gray-300 mb-1">
+                  <span className="font-medium">Token Supply:</span>{" "}
+                  {Number(bondingCurveInfo.tokenSupply).toFixed(4)}{" "}
+                  {tokenInfo.symbol || "tokens"}
+                </p>
+              </div>
+            </div>
           ) : (
             <p className="text-yellow-400">
               No bonding curve contract linked to this token.
             </p>
           )}
         </div>
+
+        {/* Trading UI */}
+        {bondingCurveAddress && tokenInfo.address && (
+          <div className="mt-6 border-t border-gray-700 pt-4">
+            <h3 className="text-xl font-medium text-gray-100 mb-4">
+              Trade Tokens
+            </h3>
+
+            <div className="flex border-b border-gray-700">
+              <button
+                className={`px-4 py-2 text-sm font-medium ${
+                  activeTab === "buy"
+                    ? "text-blue-400 border-b-2 border-blue-400"
+                    : "text-gray-400 hover:text-gray-300"
+                }`}
+                onClick={() => setActiveTab("buy")}
+              >
+                Buy Tokens
+              </button>
+              <button
+                className={`px-4 py-2 text-sm font-medium ${
+                  activeTab === "sell"
+                    ? "text-blue-400 border-b-2 border-blue-400"
+                    : "text-gray-400 hover:text-gray-300"
+                }`}
+                onClick={() => setActiveTab("sell")}
+              >
+                Sell Tokens
+              </button>
+            </div>
+
+            <div className="mt-4">
+              {activeTab === "buy" ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Amount of {tokenInfo.symbol || "tokens"} to buy
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="number"
+                        value={buyState.amount}
+                        onChange={(e) => handleBuyAmountChange(e.target.value)}
+                        placeholder="0.0"
+                        className="bg-gray-700 border border-gray-600 text-white p-2 rounded-md w-full"
+                        disabled={buyState.isProcessing || buyState.isApproving}
+                      />
+                      <span className="text-gray-400 text-sm whitespace-nowrap">
+                        {tokenInfo.symbol || "tokens"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {buyState.amount && Number(buyState.amount) > 0 && (
+                    <div className="bg-gray-700 p-2 rounded-md">
+                      <p className="text-sm text-gray-300">
+                        Estimated cost:{" "}
+                        {Number(buyState.estimatedCost).toFixed(6)} CORDEX
+                      </p>
+                    </div>
+                  )}
+
+                  {buyState.hasAllowance ? (
+                    <button
+                      onClick={executeBuy}
+                      disabled={
+                        !buyState.amount ||
+                        buyState.isProcessing ||
+                        Number(buyState.amount) <= 0
+                      }
+                      className={`w-full py-2 px-4 rounded-md font-medium ${
+                        !buyState.amount ||
+                        buyState.isProcessing ||
+                        Number(buyState.amount) <= 0
+                          ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                          : "bg-blue-600 hover:bg-blue-700 text-white"
+                      }`}
+                    >
+                      {buyState.isProcessing
+                        ? "Processing..."
+                        : `Buy ${tokenInfo.symbol || "Tokens"}`}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={approveBuy}
+                      disabled={buyState.isApproving}
+                      className={`w-full py-2 px-4 rounded-md font-medium ${
+                        buyState.isApproving
+                          ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                          : "bg-green-600 hover:bg-green-700 text-white"
+                      }`}
+                    >
+                      {buyState.isApproving ? "Approving..." : "Approve CORDEX"}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Amount of {tokenInfo.symbol || "tokens"} to sell
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="number"
+                        value={sellState.amount}
+                        onChange={(e) => handleSellAmountChange(e.target.value)}
+                        placeholder="0.0"
+                        className="bg-gray-700 border border-gray-600 text-white p-2 rounded-md w-full"
+                        disabled={
+                          sellState.isProcessing || sellState.isApproving
+                        }
+                      />
+                      <span className="text-gray-400 text-sm whitespace-nowrap">
+                        {tokenInfo.symbol || "tokens"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {sellState.amount && Number(sellState.amount) > 0 && (
+                    <div className="bg-gray-700 p-2 rounded-md">
+                      <p className="text-sm text-gray-300">
+                        Estimated payout:{" "}
+                        {Number(sellState.estimatedCost).toFixed(6)} CORDEX
+                      </p>
+                    </div>
+                  )}
+
+                  {hasInsufficientTokenBalance() && (
+                    <p className="text-red-400 text-sm">
+                      Insufficient token balance
+                    </p>
+                  )}
+
+                  {sellState.hasAllowance ? (
+                    <button
+                      onClick={executeSell}
+                      disabled={
+                        !sellState.amount ||
+                        sellState.isProcessing ||
+                        Number(sellState.amount) <= 0 ||
+                        hasInsufficientTokenBalance()
+                      }
+                      className={`w-full py-2 px-4 rounded-md font-medium ${
+                        !sellState.amount ||
+                        sellState.isProcessing ||
+                        Number(sellState.amount) <= 0 ||
+                        hasInsufficientTokenBalance()
+                          ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                          : "bg-orange-600 hover:bg-orange-700 text-white"
+                      }`}
+                    >
+                      {sellState.isProcessing
+                        ? "Processing..."
+                        : `Sell ${tokenInfo.symbol || "Tokens"}`}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={approveSell}
+                      disabled={sellState.isApproving}
+                      className={`w-full py-2 px-4 rounded-md font-medium ${
+                        sellState.isApproving
+                          ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                          : "bg-green-600 hover:bg-green-700 text-white"
+                      }`}
+                    >
+                      {sellState.isApproving
+                        ? "Approving..."
+                        : `Approve ${tokenInfo.symbol || "Tokens"}`}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

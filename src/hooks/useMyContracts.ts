@@ -14,7 +14,7 @@ import {
 // --- Constants & ABIs ---
 
 const factoryAddress =
-  "0xca38c4d7889d7337ceea5c53db82f70f12a7b9e7" as `0x${string}`;
+  "0x3f7a8fdcd417b0ef47fed55b027b04615f35ad12" as `0x${string}`;
 
 // Factory ABI (partial)
 const factoryAbi = [

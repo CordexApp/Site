@@ -8,7 +8,7 @@ import { BondingCurveAbi } from "@/abis/BondingCurveContract";
 
 // Factory contract address (same as contractServices)
 export const FACTORY_ADDRESS =
-  "0xca38c4d7889d7337ceea5c53db82f70f12a7b9e7" as `0x${string}`;
+  "0x3f7a8fdcd417b0ef47fed55b027b04615f35ad12" as `0x${string}`;
 
 // Minimal ABI for ContractFactory (Use imported ABI)
 export const factoryAbi = ContractFactoryAbi;
@@ -221,4 +221,107 @@ export const findBondingCurveForProviderToken = async (
     );
     return null;
   }
+};
+
+// -------- Bonding Curve Trading Functions --------
+
+export const getCurrentPrice = async (
+  publicClient: ReturnType<typeof usePublicClient> | undefined,
+  bondingCurveAddress: `0x${string}`
+): Promise<string> => {
+  try {
+    if (!publicClient) return "0";
+    const price = await publicClient.readContract({
+      address: bondingCurveAddress,
+      abi: bondingCurveAbi,
+      functionName: "getCurrentPrice",
+    });
+    return formatEther(price as bigint);
+  } catch (err) {
+    console.error("[bondingCurveServices] getCurrentPrice error:", err);
+    return "0";
+  }
+};
+
+export const calculatePrice = async (
+  publicClient: ReturnType<typeof usePublicClient> | undefined,
+  bondingCurveAddress: `0x${string}`,
+  amount: bigint
+): Promise<bigint> => {
+  try {
+    if (!publicClient) return BigInt(0);
+    const price = await publicClient.readContract({
+      address: bondingCurveAddress,
+      abi: bondingCurveAbi,
+      functionName: "calculatePrice",
+      args: [amount],
+    });
+    return price as bigint;
+  } catch (err) {
+    console.error("[bondingCurveServices] calculatePrice error:", err);
+    return BigInt(0);
+  }
+};
+
+export const getTokenSupply = async (
+  publicClient: ReturnType<typeof usePublicClient> | undefined,
+  bondingCurveAddress: `0x${string}`
+): Promise<bigint> => {
+  try {
+    if (!publicClient) return BigInt(0);
+    const supply = await publicClient.readContract({
+      address: bondingCurveAddress,
+      abi: bondingCurveAbi,
+      functionName: "tokenSupply",
+    });
+    console.log("[bondingCurveServices] Unformatted token supply:", supply);
+    return supply as bigint;
+  } catch (err) {
+    console.error("[bondingCurveServices] getTokenSupply error:", err);
+    return BigInt(0);
+  }
+};
+
+export const getCordexTokenAddress = async (
+  publicClient: ReturnType<typeof usePublicClient> | undefined,
+  bondingCurveAddress: `0x${string}`
+): Promise<`0x${string}` | null> => {
+  try {
+    if (!publicClient) return null;
+    const address = await publicClient.readContract({
+      address: bondingCurveAddress,
+      abi: bondingCurveAbi,
+      functionName: "cordexTokenAddress",
+    });
+    return address as `0x${string}`;
+  } catch (err) {
+    console.error("[bondingCurveServices] getCordexTokenAddress error:", err);
+    return null;
+  }
+};
+
+export const buyTokens = (
+  writeContract: ReturnType<typeof useWriteContract>["writeContract"],
+  bondingCurveAddress: `0x${string}`,
+  tokenAmount: bigint
+) => {
+  return writeContract({
+    address: bondingCurveAddress,
+    abi: bondingCurveAbi,
+    functionName: "buyTokens",
+    args: [tokenAmount],
+  });
+};
+
+export const sellTokens = (
+  writeContract: ReturnType<typeof useWriteContract>["writeContract"],
+  bondingCurveAddress: `0x${string}`,
+  tokenAmount: bigint
+) => {
+  return writeContract({
+    address: bondingCurveAddress,
+    abi: bondingCurveAbi,
+    functionName: "sellTokens",
+    args: [tokenAmount],
+  });
 };
