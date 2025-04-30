@@ -12,7 +12,7 @@ import { ProviderContractAbi } from "@/abis/ProviderContract";
 
 // ContractFactory configuration
 export const contractConfig = {
-  address: "0x3f7a8fdcd417b0ef47fed55b027b04615f35ad12" as `0x${string}`,
+  address: "0xaa0c84e338e8e1b1086b2f002a33306d2a2182b1" as `0x${string}`,
   abi: ContractFactoryAbi,
 };
 
@@ -131,6 +131,7 @@ export const deployProviderContract = (
     params
   );
 
+  // Note: The contract factory automatically uses the connected wallet as the owner
   return writeContract({
     ...contractConfig,
     functionName: "deployProviderContract",

@@ -13,6 +13,10 @@ import {
   FACTORY_ADDRESS,
 } from "@/services/bondingCurveServices";
 import { formatEther } from "viem";
+import {
+  getServiceByContractAddress,
+  updateService,
+} from "@/services/servicesService";
 
 // Simple helper to shorten addresses
 export const shorten = (addr: string) =>
@@ -57,6 +61,7 @@ export function useBondingCurveSetup() {
     providerTokenAddress,
     bondingCurveAddress,
     ownerAddress,
+    providerContractAddress,
     refreshData,
     isLoading: contextLoading,
   } = useManageService();
@@ -67,6 +72,7 @@ export function useBondingCurveSetup() {
   const [allowance, setAllowance] = useState<bigint>(BigInt(0));
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isUpdatingDb, setIsUpdatingDb] = useState(false);
 
   // Check if the current user is the owner
   const isOwner = ownerAddress === walletAddress;
@@ -81,6 +87,66 @@ export function useBondingCurveSetup() {
   // Fixed parameters (18-dec scaled)
   const fixedSlope = BigInt("100000000000000"); // 0.0001 * 1e18
   const fixedIntercept = BigInt("10000000000000000"); // 0.01 * 1e18
+
+  // Function to update the service in the database
+  const updateBondingCurveInDb = async (bondingCurveAddr: string) => {
+    if (!providerContractAddress) return;
+
+    try {
+      setIsUpdatingDb(true);
+      console.log(
+        "Updating database with bonding curve address:",
+        bondingCurveAddr
+      );
+      // First get the service by provider contract address
+      const service = await getServiceByContractAddress(
+        providerContractAddress
+      );
+
+      if (service) {
+        // Update the service with the bonding curve address
+        await updateService(service.id, {
+          bonding_curve_address: bondingCurveAddr,
+        });
+        console.log(
+          "Updated service with bonding curve address:",
+          bondingCurveAddr
+        );
+      } else {
+        console.error(
+          "Service not found for contract address:",
+          providerContractAddress
+        );
+      }
+    } catch (err) {
+      console.error("Error updating service with bonding curve address:", err);
+    } finally {
+      setIsUpdatingDb(false);
+    }
+  };
+
+  // Monitor bonding curve address changes from context
+  useEffect(() => {
+    // Only attempt to update the database if:
+    // 1. We have a bonding curve address from the context
+    // 2. We're not currently updating the database
+    // 3. We have a provider contract address
+    if (bondingCurveAddress && !isUpdatingDb && providerContractAddress) {
+      console.log(
+        "Detected bonding curve address from context:",
+        bondingCurveAddress
+      );
+      updateBondingCurveInDb(bondingCurveAddress);
+    }
+  }, [bondingCurveAddress, providerContractAddress, isUpdatingDb]);
+
+  // When deployment transaction is confirmed, just refresh the context data
+  useEffect(() => {
+    if (isDeployTxConfirmed && deployTxHash && publicClient) {
+      console.log("Deployment confirmed, refreshing service data...");
+      refreshData();
+    }
+  }, [isDeployTxConfirmed, refreshData, deployTxHash, publicClient]);
 
   // Update transaction state effects
   useEffect(() => {
@@ -101,13 +167,6 @@ export function useBondingCurveSetup() {
       });
     }
   }, [isApproveTxConfirmed, providerTokenAddress, walletAddress, publicClient]);
-
-  useEffect(() => {
-    // When deployment is confirmed, refresh context data
-    if (isDeployTxConfirmed) {
-      refreshData();
-    }
-  }, [isDeployTxConfirmed, refreshData]);
 
   // Load token balance when token address is available
   useEffect(() => {
@@ -211,7 +270,7 @@ export function useBondingCurveSetup() {
   // Processing states
   const isApproving = isApprovePending || isApproveTxConfirming;
   const isDeploying = isDeployPending || isDeployTxConfirming;
-  const isProcessing = isApproving || isDeploying;
+  const isProcessing = isApproving || isDeploying || isUpdatingDb;
 
   // Use network errors if available
   useEffect(() => {
@@ -234,6 +293,7 @@ export function useBondingCurveSetup() {
     isOwner,
     bondingCurveAddress,
     providerTokenAddress,
+    isUpdatingDb,
 
     // Computed values
     initialTokenAmount,

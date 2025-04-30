@@ -14,6 +14,18 @@ interface CreateServiceRequest {
   image?: string;
   provider_contract_address?: string;
   coin_contract_address?: string;
+  bonding_curve_address?: string;
+  owner_wallet_address?: string;
+}
+
+interface UpdateServiceRequest {
+  name?: string;
+  endpoint?: string;
+  image?: string;
+  provider_contract_address?: string;
+  coin_contract_address?: string;
+  bonding_curve_address?: string;
+  owner_wallet_address?: string;
 }
 
 export async function getAllServices(): Promise<Service[]> {
@@ -60,6 +72,39 @@ export async function getServiceById(id: string): Promise<Service | null> {
   }
 }
 
+export async function getServiceByContractAddress(
+  contractAddress: string
+): Promise<Service | null> {
+  try {
+    const response = await fetch(
+      `${API_URL}/services/contract/${contractAddress}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        next: { revalidate: 60 }, // Cache for 60 seconds
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(
+        `Failed to fetch service by contract: ${response.status}`
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(
+      `Error fetching service by contract ${contractAddress}:`,
+      error
+    );
+    return null;
+  }
+}
+
 export async function createService(
   serviceData: CreateServiceRequest
 ): Promise<Service | null> {
@@ -86,6 +131,34 @@ export async function createService(
     return await response.json();
   } catch (error) {
     console.error("Error creating service:", error);
+    return null;
+  }
+}
+
+export async function updateService(
+  serviceId: string,
+  updateData: UpdateServiceRequest
+): Promise<Service | null> {
+  try {
+    const response = await fetch(`${API_URL}/services/${serviceId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updateData),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Server error response:", errorText);
+      throw new Error(
+        `Failed to update service: ${response.status} - ${errorText}`
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`Error updating service ${serviceId}:`, error);
     return null;
   }
 }

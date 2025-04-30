@@ -3,6 +3,7 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
   usePublicClient,
+  useAccount,
 } from "wagmi";
 import { createService } from "@/services/servicesService";
 import {
@@ -30,6 +31,7 @@ export default function useServiceDeployment() {
     "idle" | "pending" | "success" | "error"
   >("idle");
   const publicClient = usePublicClient();
+  const { address: connectedWalletAddress } = useAccount();
 
   // Store service details for registration
   const [serviceDetails, setServiceDetails] = useState<{
@@ -106,6 +108,7 @@ export default function useServiceDeployment() {
       console.log("Starting service registration with contracts:", {
         provider: providerContractAddress,
         coin: coinContractAddress,
+        owner: connectedWalletAddress,
       });
 
       // Create service in database
@@ -115,6 +118,7 @@ export default function useServiceDeployment() {
         image: imageUrl || undefined,
         provider_contract_address: providerContractAddress,
         coin_contract_address: coinContractAddress,
+        owner_wallet_address: connectedWalletAddress,
       });
 
       const newService = await createService({
@@ -123,6 +127,7 @@ export default function useServiceDeployment() {
         image: imageUrl || undefined,
         provider_contract_address: providerContractAddress,
         coin_contract_address: coinContractAddress,
+        owner_wallet_address: connectedWalletAddress,
       });
 
       if (!newService) {

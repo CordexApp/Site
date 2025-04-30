@@ -116,7 +116,7 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Deploy service contract
+      // Deploy service contract - owner wallet address is handled automatically by the service
       deployService({
         serviceName,
         apiEndpoint,

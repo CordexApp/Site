@@ -1,7 +1,13 @@
 "use client";
 
 import { useTokenDashboard } from "@/hooks/useTokenDashboard";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import PriceChart from "./PriceChart";
+import {
+  getOHLCVData,
+  getAvailableTimeframes,
+  OHLCVCandle,
+} from "@/services/tradingDataService";
 
 interface TokenDashboardProps {
   providerContractAddress: `0x${string}`;
@@ -28,6 +34,61 @@ export default function TokenDashboard({
   } = useTokenDashboard(providerContractAddress);
 
   const [activeTab, setActiveTab] = useState<"buy" | "sell">("buy");
+
+  // Chart state
+  const [chartData, setChartData] = useState<OHLCVCandle[]>([]);
+  const [chartTimeframe, setChartTimeframe] = useState<string>("1h");
+  const [availableTimeframes, setAvailableTimeframes] = useState<string[]>([
+    "1h",
+  ]);
+  const [isChartLoading, setIsChartLoading] = useState<boolean>(false);
+
+  // Fetch chart data when bonding curve address changes or timeframe changes
+  useEffect(() => {
+    async function fetchChartData() {
+      if (!bondingCurveAddress) return;
+
+      setIsChartLoading(true);
+
+      try {
+        // Fetch the available timeframes first
+        const timeframes = await getAvailableTimeframes(bondingCurveAddress);
+        if (timeframes.length > 0) {
+          setAvailableTimeframes(timeframes);
+
+          // If current timeframe is not available, use the first one
+          if (!timeframes.includes(chartTimeframe)) {
+            setChartTimeframe(timeframes[0]);
+          }
+        }
+
+        // Fetch the OHLCV data
+        const response = await getOHLCVData(
+          bondingCurveAddress,
+          chartTimeframe,
+          1000 // Limit to 1000 candles
+        );
+
+        if (response.candles.length > 0) {
+          setChartData(response.candles);
+        } else {
+          setChartData([]);
+        }
+      } catch (error) {
+        console.error("Error fetching chart data:", error);
+        setChartData([]);
+      } finally {
+        setIsChartLoading(false);
+      }
+    }
+
+    fetchChartData();
+  }, [bondingCurveAddress, chartTimeframe]);
+
+  // Handle timeframe change
+  const handleTimeframeChange = (timeframe: string) => {
+    setChartTimeframe(timeframe);
+  };
 
   if (isLoading) {
     return (
@@ -133,6 +194,20 @@ export default function TokenDashboard({
             </p>
           )}
         </div>
+
+        {/* Price Chart */}
+        {bondingCurveAddress && (
+          <div className="mt-6 pt-4 border-t border-gray-700">
+            <PriceChart
+              data={chartData}
+              timeframe={chartTimeframe}
+              onTimeframeChange={handleTimeframeChange}
+              availableTimeframes={availableTimeframes}
+              isLoading={isChartLoading}
+              symbol={tokenInfo.symbol || "Token"}
+            />
+          </div>
+        )}
 
         {/* Trading UI */}
         {bondingCurveAddress && tokenInfo.address && (
