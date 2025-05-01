@@ -7,7 +7,6 @@ import {
 } from "wagmi";
 import {
   findBondingCurveForProviderToken,
-  getProviderTokensForWallet,
   getCurrentPrice,
   calculatePrice,
   getTokenSupply,
@@ -18,6 +17,7 @@ import {
   getTokenAllowance,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
+import { getServiceByContractAddress } from "@/services/servicesService";
 import {
   getOHLCVData,
   getAvailableTimeframes,
@@ -341,28 +341,30 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
           `[TokenDashboard] Found owner address: ${fetchedOwnerAddress}`
         );
 
-        // Step 2: Get provider tokens associated with the owner from the factory
-        const providerTokens = await getProviderTokensForWallet(
-          publicClient,
-          fetchedOwnerAddress
-        );
-        console.log(
-          `[TokenDashboard] Found provider tokens for owner:`,
-          providerTokens
+        // Step 2: Get the service details from the backend using the provider contract address
+        const service = await getServiceByContractAddress(
+          providerContractAddress
         );
 
-        if (!providerTokens || providerTokens.length === 0) {
-          console.log(
-            "[TokenDashboard] No provider tokens found for this owner."
+        if (!service) {
+          throw new Error(
+            `Failed to fetch service details for contract ${providerContractAddress}`
           );
-          // If no tokens, can't proceed to find token details or bonding curve
+        }
+
+        if (!service.coin_contract_address) {
+          console.log(
+            `[TokenDashboard] Service ${service.id} does not have a coin_contract_address.`
+          );
           setIsLoading(false);
           return;
         }
 
-        // Select the relevant token (assuming the last one is the most recent/relevant, like in ManageServiceContext)
-        const tokenAddress = providerTokens[providerTokens.length - 1];
-        console.log(`[TokenDashboard] Selected token address: ${tokenAddress}`);
+        // Use the coin_contract_address from the service as the token address
+        const tokenAddress = service.coin_contract_address as `0x${string}`;
+        console.log(
+          `[TokenDashboard] Using token address from service: ${tokenAddress}`
+        );
 
         // Step 3: Get token details (name, symbol, balance)
         let currentTokenInfo: TokenInfo = {
