@@ -70,6 +70,13 @@ export const BondingCurveAbi = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [{ name: "_tokenAmount", type: "uint256" }],
+    name: "calculateSellPayout",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
 
   // --- Write Functions ---
   {

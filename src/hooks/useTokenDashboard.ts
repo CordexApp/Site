@@ -15,6 +15,7 @@ import {
   sellTokens,
   approveTokens,
   getTokenAllowance,
+  getSellPayoutEstimate,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import { getServiceByContractAddress } from "@/services/servicesService";
@@ -622,7 +623,7 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
     try {
       // Convert to wei for calculation
       const tokenAmountWei = amount;
-      const payout = await calculatePrice(
+      const payout = await getSellPayoutEstimate(
         publicClient,
         bondingCurveAddress,
         parseEther(tokenAmountWei)

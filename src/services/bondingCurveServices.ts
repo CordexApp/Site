@@ -379,3 +379,23 @@ export const sellTokens = async (
   console.log("[bondingCurveServices] Sell transaction confirmed:", receipt);
   return receipt;
 };
+
+export const getSellPayoutEstimate = async (
+  publicClient: ReturnType<typeof usePublicClient> | undefined,
+  bondingCurveAddress: `0x${string}`,
+  tokenAmount: bigint
+): Promise<bigint> => {
+  try {
+    if (!publicClient) return BigInt(0);
+    const payout = await publicClient.readContract({
+      address: bondingCurveAddress,
+      abi: bondingCurveAbi,
+      functionName: "calculateSellPayout",
+      args: [tokenAmount],
+    });
+    return payout as bigint;
+  } catch (err) {
+    console.error("[bondingCurveServices] getSellPayoutEstimate error:", err);
+    return BigInt(0);
+  }
+};
