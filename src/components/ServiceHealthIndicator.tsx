@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 
 interface ServiceHealthIndicatorProps {
   endpoint: string;
+  bypassHealthCheck?: boolean;
 }
 
 interface HealthStatus {
@@ -15,11 +16,23 @@ interface HealthStatus {
 
 export default function ServiceHealthIndicator({
   endpoint,
+  bypassHealthCheck = false,
 }: ServiceHealthIndicatorProps) {
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    // If bypass is enabled, immediately set as healthy
+    if (bypassHealthCheck) {
+      setHealthStatus({
+        isHealthy: true,
+        lastChecked: new Date(),
+        message: "Health check bypassed - Always healthy",
+      });
+      setIsLoading(false);
+      return;
+    }
+
     const checkHealth = async () => {
       console.log(
         "[ServiceHealthIndicator] Checking health for endpoint:",
@@ -120,7 +133,7 @@ export default function ServiceHealthIndicator({
     return () => {
       clearInterval(intervalId);
     };
-  }, [endpoint]);
+  }, [endpoint, bypassHealthCheck]);
 
   if (isLoading && !healthStatus) {
     return (

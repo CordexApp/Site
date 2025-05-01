@@ -59,7 +59,10 @@ export default async function ServicePage({ params }: ServicePageProps) {
               <div className="flex items-center">
                 <p className="text-gray-400 mr-2">endpoint:</p>
                 {endpoint ? (
-                  <ServiceHealthIndicator endpoint={endpoint} />
+                  <ServiceHealthIndicator
+                    endpoint={endpoint}
+                    bypassHealthCheck={true}
+                  />
                 ) : (
                   <span className="text-sm text-gray-400">none</span>
                 )}

@@ -181,7 +181,9 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
         ) : (
           <div className="space-y-4">
             <div>
-              <InputLabel>amount of CORDEX to sell</InputLabel>
+              <InputLabel>
+                amount of {tokenSymbol || "tokens"} to sell
+              </InputLabel>
               <div className="flex items-center space-x-2 w-full">
                 <NumericInput
                   value={sellState.amount}

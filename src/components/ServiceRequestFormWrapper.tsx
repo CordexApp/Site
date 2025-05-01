@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useService } from "@/context/ServiceContext";
-import ServiceRequestForm from "./ServiceRequestForm";
+import DemoServiceRequestForm from "./DemoServiceRequestForm";
 import { usePublicClient } from "wagmi";
 import { getContractMaxEscrow } from "@/services/contractServices";
 
@@ -65,9 +65,8 @@ export default function ServiceRequestFormWrapper() {
   }
 
   return (
-    <ServiceRequestForm
+    <DemoServiceRequestForm
       serviceName={serviceName}
-      endpoint={endpoint}
       providerContractAddress={providerContractAddress}
     />
   );
