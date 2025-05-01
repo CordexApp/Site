@@ -519,11 +519,10 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
               };
               console.log("[useTokenDashboard] Decoded Event Args:", args);
 
-              // Refresh general data on any trade
+              // Refresh contract info immediately
               refreshBondingCurveInfo();
-              fetchChartData();
 
-              // If the trade involved the current user, refresh their balance
+              // Refresh balance immediately if user matches
               if (
                 args.user &&
                 walletAddress &&
@@ -534,6 +533,17 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
                 );
                 refreshTokenBalance();
               }
+
+              // Delay chart data fetch to allow backend processing
+              console.log(
+                "[useTokenDashboard] Scheduling chart data refresh in 5 seconds..."
+              );
+              setTimeout(() => {
+                console.log(
+                  "[useTokenDashboard] Fetching delayed chart data..."
+                );
+                fetchChartData();
+              }, 5000); // 5 second delay
             } else {
               console.error(
                 "[useTokenDashboard] Failed to decode event args:",
