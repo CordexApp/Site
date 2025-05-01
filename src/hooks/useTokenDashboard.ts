@@ -25,12 +25,12 @@ import {
 } from "@/services/tradingDataService";
 import {
   formatEther,
-  parseEther,
   maxUint256,
   Abi,
   decodeEventLog,
   parseAbiItem,
   Log,
+  parseEther,
 } from "viem";
 import { ERC20Abi } from "@/abis/ERC20";
 import { BondingCurveAbi } from "@/abis/BondingCurveContract";
@@ -592,11 +592,11 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
 
     try {
       // Convert to wei for calculation
-      const tokenAmountWei = parseEther(amount);
+      const tokenAmountWei = amount;
       const cost = await calculatePrice(
         publicClient,
         bondingCurveAddress,
-        tokenAmountWei
+        parseEther(tokenAmountWei)
       );
       setBuyState((prev) => ({ ...prev, estimatedCost: formatEther(cost) }));
     } catch (err) {
@@ -621,11 +621,11 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
 
     try {
       // Convert to wei for calculation
-      const tokenAmountWei = parseEther(amount);
+      const tokenAmountWei = amount;
       const payout = await calculatePrice(
         publicClient,
         bondingCurveAddress,
-        tokenAmountWei
+        parseEther(tokenAmountWei)
       );
       setSellState((prev) => ({ ...prev, estimatedCost: formatEther(payout) }));
     } catch (err) {
@@ -763,12 +763,12 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
     setError(null);
     setSuccessInfo(null);
     try {
-      const tokenAmountWei = parseEther(buyState.amount);
+      const tokenAmountWei = buyState.amount;
       const receipt = await buyTokens(
         publicClient,
         writeContractAsync,
         bondingCurveAddress!,
-        tokenAmountWei
+        parseEther(tokenAmountWei)
       );
 
       if (receipt && receipt.status === "success") {
@@ -822,12 +822,12 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
     setError(null);
     setSuccessInfo(null);
     try {
-      const tokenAmountWei = parseEther(sellState.amount);
+      const tokenAmountWei = sellState.amount;
       const receipt = await sellTokens(
         publicClient,
         writeContractAsync,
         bondingCurveAddress!,
-        tokenAmountWei
+        parseEther(tokenAmountWei)
       );
 
       if (receipt && receipt.status === "success") {
