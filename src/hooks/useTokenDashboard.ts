@@ -35,20 +35,21 @@ import {
 import { ERC20Abi } from "@/abis/ERC20";
 import { BondingCurveAbi } from "@/abis/BondingCurveContract";
 
-interface TokenInfo {
+// Types (Ensure these are defined or imported correctly)
+export interface TokenInfo {
   address: `0x${string}` | null;
   name: string | null;
   symbol: string | null;
   balance: string | null;
 }
 
-interface BondingCurveInfo {
+export interface BondingCurveInfo {
   currentPrice: string;
   tokenSupply: string;
   cordexTokenAddress: `0x${string}` | null;
 }
 
-interface TradingState {
+export interface TradingState {
   amount: string;
   estimatedCost: string;
   isApproving: boolean;

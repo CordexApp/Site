@@ -120,7 +120,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
           </div>
         </div>
         {contractAddress && (
-          <div className="mt-8">
+          <div className="w-full">
             <TokenDashboard
               providerContractAddress={contractAddress as `0x${string}`}
             />

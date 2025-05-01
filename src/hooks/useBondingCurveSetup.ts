@@ -12,7 +12,7 @@ import {
   deployBondingCurveContract,
   FACTORY_ADDRESS,
 } from "@/services/bondingCurveServices";
-import { formatEther } from "viem";
+import { formatEther, maxUint256 } from "viem";
 import {
   getServiceByContractAddress,
   updateService,
@@ -29,6 +29,7 @@ export function useBondingCurveSetup() {
   // Transaction state for approval
   const {
     writeContract: writeApprove,
+    writeContractAsync: writeApproveAsync,
     data: approveTxHash,
     isPending: isApprovePending,
     isError: isApproveError,
@@ -226,17 +227,13 @@ export function useBondingCurveSetup() {
     try {
       setError(null);
 
-      // Calculate the amount needed (plus small buffer)
-      const amountToApprove =
-        (tokenBalance * BigInt(Number(percentage || "0"))) / BigInt(100);
-      const bufferedAmount =
-        amountToApprove + (amountToApprove * BigInt(5)) / BigInt(100);
-
+      // Use writeApproveAsync and pass publicClient
       await approveTokens(
-        writeApprove,
+        publicClient,
+        writeApproveAsync,
         providerTokenAddress,
         FACTORY_ADDRESS,
-        bufferedAmount
+        maxUint256
       );
       // Transaction is now pending and will be tracked by the useWaitForTransactionReceipt hook
     } catch (err) {
