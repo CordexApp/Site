@@ -181,7 +181,7 @@ export default function ServiceRequestForm({
           </label>
           <textarea
             id="request"
-            className="w-full p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+            className="w-full p-2 bg-black border border-gray-700 rounded-md text-white"
             rows={4}
             value={requestInput}
             onChange={(e) => setRequestInput(e.target.value)}
@@ -246,7 +246,7 @@ export default function ServiceRequestForm({
       {response && (
         <div className="mt-6">
           <h3 className="text-lg font-medium mb-2">API Response:</h3>
-          <pre className="bg-gray-800 p-4 rounded-md overflow-x-auto text-sm">
+          <pre className="bg-black p-4 rounded-md overflow-x-auto text-sm">
             {JSON.stringify(response, null, 2)}
           </pre>
         </div>

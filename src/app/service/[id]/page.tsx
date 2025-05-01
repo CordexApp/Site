@@ -3,7 +3,7 @@ import { ServiceProvider } from "@/context/ServiceContext";
 import { SecondaryButton } from "@/components/ui/SecondaryButton";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import ServiceRequestForm from "@/components/ServiceRequestForm";
+import ServiceRequestFormWrapper from "@/components/ServiceRequestFormWrapper";
 import ServiceHealthIndicator from "@/components/ServiceHealthIndicator";
 import ContractStatusIndicator from "@/components/ContractStatusIndicator";
 import ContractMaxEscrowIndicator from "@/components/ContractMaxEscrowIndicator";
@@ -104,13 +104,9 @@ export default async function ServicePage({ params }: ServicePageProps) {
 
             <div className="w-full border-t border-gray-700 pt-6">
               {endpoint && contractAddress ? (
-                <ServiceRequestForm
-                  serviceName={service.name}
-                  endpoint={endpoint}
-                  providerContractAddress={contractAddress}
-                />
+                <ServiceRequestFormWrapper />
               ) : (
-                <div className="p-4 bg-gray-800 rounded border border-gray-700">
+                <div className="p-4 bg-black rounded border border-gray-700">
                   <p className="text-yellow-400">
                     Service not properly configured for API requests
                   </p>

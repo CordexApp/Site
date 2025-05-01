@@ -56,7 +56,7 @@ export default function ServiceRequestFormWrapper() {
 
   if (!service || !service.endpoint || !service.provider_contract_address) {
     return (
-      <div className="p-4 bg-gray-800 rounded border border-gray-700">
+      <div className="p-4 bg-black rounded border border-gray-700">
         <p className="text-yellow-400">
           Service not properly configured for API requests
         </p>

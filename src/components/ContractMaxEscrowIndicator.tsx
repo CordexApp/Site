@@ -98,7 +98,7 @@ export default function ContractMaxEscrowIndicator({
 
       {/* Tooltip with additional info */}
       <div
-        className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-gray-800 border border-gray-700 rounded-md shadow-lg 
+        className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-black border border-gray-700 rounded-md shadow-lg 
                      text-xs opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-10"
       >
         <p className="font-semibold mb-1">Contract Max Escrow</p>

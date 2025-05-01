@@ -13,6 +13,7 @@ import {
   Time,
 } from "lightweight-charts";
 import { OHLCVCandle } from "@/services/tradingDataService";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 interface PriceChartProps {
   data: OHLCVCandle[];
@@ -44,7 +45,7 @@ export default function PriceChart({
       width: chartContainerRef.current.clientWidth,
       height: 400,
       layout: {
-        background: { type: ColorType.Solid, color: "#1E293B" },
+        background: { type: ColorType.Solid, color: "#000000" },
         textColor: "#D1D5DB",
       },
       grid: {
@@ -71,7 +72,6 @@ export default function PriceChart({
       borderUpColor: "#10B981",
       wickDownColor: "#EF4444",
       wickUpColor: "#10B981",
-      // lastPriceAnimation: LastPriceAnimationMode.Continuous, // Temporarily removed
     });
 
     chartRef.current = chart;
@@ -178,7 +178,7 @@ export default function PriceChart({
   return (
     <div className="flex flex-col space-y-2">
       <div className="flex justify-between items-center mb-2">
-        <h3 className="text-lg font-medium text-gray-200">
+        <h3 className="text-lg font-medium text-gray-white">
           {symbol} Price Chart
         </h3>
 
@@ -187,10 +187,10 @@ export default function PriceChart({
             <button
               key={tf}
               onClick={() => onTimeframeChange && onTimeframeChange(tf)}
-              className={`px-2 py-1 text-xs rounded ${
+              className={`px-2 py-1 text-xs hover:border-white cursor-pointer ${
                 timeframe === tf
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                  ? "border-1 border-white text-white"
+                  : "border-1 border-gray-700 text-white"
               }`}
             >
               {formatTimeframe(tf)}
@@ -204,11 +204,8 @@ export default function PriceChart({
         className="relative h-[400px] w-full rounded-md border border-gray-700"
       >
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-70 z-10">
-            <div className="flex flex-col items-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-              <span className="text-gray-300 mt-2">Loading chart data...</span>
-            </div>
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-10">
+            <LoadingDots text="Loading chart data" />
           </div>
         )}
 

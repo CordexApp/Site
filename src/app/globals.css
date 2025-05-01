@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@theme {
+  --color-cordex-green: #33ff00;
+  --color-cordex-red: #ff0000;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

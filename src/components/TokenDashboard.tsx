@@ -2,6 +2,9 @@
 
 import { useTokenDashboard } from "@/hooks/useTokenDashboard";
 import PriceChart from "./PriceChart";
+import { LoadingDots } from "@/components/ui/LoadingDots";
+import { CopyableHash } from "@/components/ui/CopyableHash";
+import TokenTrading from "./TokenTrading";
 
 interface TokenDashboardProps {
   providerContractAddress: `0x${string}`;
@@ -43,219 +46,24 @@ export default function TokenDashboard({
 
   if (isLoading) {
     return (
-      <div className="mt-8 p-4 bg-gray-800 rounded border border-gray-700">
+      <div className="mt-8 p-4">
         <h2 className="text-xl font-semibold mb-4">Token Information</h2>
-        <p className="text-gray-400">Loading token data...</p>
+        <LoadingDots text="Loading token data" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="mt-8 p-4 bg-gray-800 rounded border border-gray-700">
+      <div className="mt-8 p-4 ">
         <h2 className="text-xl font-semibold mb-4">Token Information</h2>
         <p className="text-red-400">{error}</p>
       </div>
     );
   }
 
-  // Calculate if the user has sufficient balance to sell
-  const hasInsufficientTokenBalance = () => {
-    if (!tokenInfo.balance || !sellState.amount) return false;
-    return Number(sellState.amount) > Number(tokenInfo.balance);
-  };
-
   return (
-    <div className="mt-8 p-4 bg-gray-800 rounded border border-gray-700 space-y-8">
-      {/* Price Chart */}
-      {bondingCurveAddress && (
-        <div className="pt-4 border-t border-gray-700">
-          <PriceChart
-            data={chartData}
-            timeframe={chartTimeframe}
-            onTimeframeChange={handleTimeframeChange}
-            availableTimeframes={availableTimeframes}
-            isLoading={isChartLoading}
-            symbol={tokenInfo.symbol || "Token"}
-          />
-        </div>
-      )}
-      {/* Trading UI */}
-      {bondingCurveAddress && tokenInfo.address && (
-        <div className="mt-6 border-t border-gray-700 pt-4">
-          <h3 className="text-xl font-medium text-gray-100 mb-4">
-            Trade Tokens
-          </h3>
-
-          <div className="flex border-b border-gray-700">
-            <button
-              className={`px-4 py-2 text-sm font-medium ${
-                activeTab === "buy"
-                  ? "text-blue-400 border-b-2 border-blue-400"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-              onClick={() => setActiveTab("buy")}
-            >
-              Buy Tokens
-            </button>
-            <button
-              className={`px-4 py-2 text-sm font-medium ${
-                activeTab === "sell"
-                  ? "text-blue-400 border-b-2 border-blue-400"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-              onClick={() => setActiveTab("sell")}
-            >
-              Sell Tokens
-            </button>
-          </div>
-
-          <div className="mt-4">
-            {activeTab === "buy" ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Amount of {tokenInfo.symbol || "tokens"} to buy
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="number"
-                      value={buyState.amount}
-                      onChange={(e) => handleBuyAmountChange(e.target.value)}
-                      placeholder="0.0"
-                      className="bg-gray-700 border border-gray-600 text-white p-2 rounded-md w-full"
-                      disabled={buyState.isProcessing || buyState.isApproving}
-                    />
-                    <span className="text-gray-400 text-sm whitespace-nowrap">
-                      {tokenInfo.symbol || "tokens"}
-                    </span>
-                  </div>
-                </div>
-
-                {buyState.amount && Number(buyState.amount) > 0 && (
-                  <div className="bg-gray-700 p-2 rounded-md">
-                    <p className="text-sm text-gray-300">
-                      Estimated cost:{" "}
-                      {Number(buyState.estimatedCost).toFixed(6)} CORDEX
-                    </p>
-                  </div>
-                )}
-
-                {buyState.hasAllowance ? (
-                  <button
-                    onClick={executeBuy}
-                    disabled={
-                      !buyState.amount ||
-                      buyState.isProcessing ||
-                      Number(buyState.amount) <= 0
-                    }
-                    className={`w-full py-2 px-4 rounded-md font-medium ${
-                      !buyState.amount ||
-                      buyState.isProcessing ||
-                      Number(buyState.amount) <= 0
-                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                        : "bg-blue-600 hover:bg-blue-700 text-white"
-                    }`}
-                  >
-                    {buyState.isProcessing
-                      ? "Processing..."
-                      : `Buy ${tokenInfo.symbol || "Tokens"}`}
-                  </button>
-                ) : (
-                  <button
-                    onClick={approveBuy}
-                    disabled={buyState.isApproving}
-                    className={`w-full py-2 px-4 rounded-md font-medium ${
-                      buyState.isApproving
-                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                        : "bg-green-600 hover:bg-green-700 text-white"
-                    }`}
-                  >
-                    {buyState.isApproving ? "Approving..." : "Approve CORDEX"}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Amount of {tokenInfo.symbol || "tokens"} to sell
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="number"
-                      value={sellState.amount}
-                      onChange={(e) => handleSellAmountChange(e.target.value)}
-                      placeholder="0.0"
-                      className="bg-gray-700 border border-gray-600 text-white p-2 rounded-md w-full"
-                      disabled={sellState.isProcessing || sellState.isApproving}
-                    />
-                    <span className="text-gray-400 text-sm whitespace-nowrap">
-                      {tokenInfo.symbol || "tokens"}
-                    </span>
-                  </div>
-                </div>
-
-                {sellState.amount && Number(sellState.amount) > 0 && (
-                  <div className="bg-gray-700 p-2 rounded-md">
-                    <p className="text-sm text-gray-300">
-                      Estimated payout:{" "}
-                      {Number(sellState.estimatedCost).toFixed(6)} CORDEX
-                    </p>
-                  </div>
-                )}
-
-                {hasInsufficientTokenBalance() && (
-                  <p className="text-red-400 text-sm">
-                    Insufficient token balance
-                  </p>
-                )}
-
-                {sellState.hasAllowance ? (
-                  <button
-                    onClick={executeSell}
-                    disabled={
-                      !sellState.amount ||
-                      sellState.isProcessing ||
-                      Number(sellState.amount) <= 0 ||
-                      hasInsufficientTokenBalance()
-                    }
-                    className={`w-full py-2 px-4 rounded-md font-medium ${
-                      !sellState.amount ||
-                      sellState.isProcessing ||
-                      Number(sellState.amount) <= 0 ||
-                      hasInsufficientTokenBalance()
-                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                        : "bg-orange-600 hover:bg-orange-700 text-white"
-                    }`}
-                  >
-                    {sellState.isProcessing
-                      ? "Processing..."
-                      : `Sell ${tokenInfo.symbol || "Tokens"}`}
-                  </button>
-                ) : (
-                  <button
-                    onClick={approveSell}
-                    disabled={sellState.isApproving}
-                    className={`w-full py-2 px-4 rounded-md font-medium ${
-                      sellState.isApproving
-                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                        : "bg-green-600 hover:bg-green-700 text-white"
-                    }`}
-                  >
-                    {sellState.isApproving
-                      ? "Approving..."
-                      : `Approve ${tokenInfo.symbol || "Tokens"}`}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <h2 className="text-xl font-semibold">Token Information</h2>
-
+    <div className="mt-8 p-4 space-y-8">
       {/* Display Error Message */}
       {error && (
         <div className="mb-4 p-3 bg-red-900 border border-red-700 rounded-md text-red-200 flex justify-between items-center">
@@ -269,108 +77,94 @@ export default function TokenDashboard({
         </div>
       )}
 
-      {/* Display Success Message */}
-      {successInfo && (
-        <div className="mb-4 p-3 bg-green-900 border border-green-700 rounded-md text-green-200 flex justify-between items-center">
-          <div>
-            <span>{successInfo.message}</span>
-            {blockExplorerUrl && successInfo.txHash && (
-              <a
-                href={`${blockExplorerUrl}/tx/${successInfo.txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-2 underline hover:text-green-100 text-xs"
-              >
-                View Transaction
-              </a>
+      {/* Token Header Info */}
+      {tokenInfo.address && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-x-4">
+            <h1 className="text-2xl font-bold text-white">
+              {tokenInfo.name || "Unknown"} ({tokenInfo.symbol || "?"})
+            </h1>
+            {bondingCurveInfo && (
+              <div className="text-cordex-green">
+                Market Cap:{" "}
+                {Number(
+                  Number(bondingCurveInfo.tokenSupply) *
+                    Number(bondingCurveInfo.currentPrice)
+                ).toFixed(0)}{" "}
+                CRDX
+              </div>
             )}
           </div>
-          <button
-            onClick={clearSuccessMessage}
-            className="text-green-200 hover:text-white font-bold"
-          >
-            X
-          </button>
         </div>
       )}
 
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-lg font-medium text-gray-300">
-            Provider Contract
-          </h3>
-          <p className="text-gray-400 break-words">{providerContractAddress}</p>
-        </div>
-
-        {ownerAddress && (
-          <div>
-            <h3 className="text-lg font-medium text-gray-300">Owner Address</h3>
-            <p className="text-gray-400 break-words">{ownerAddress}</p>
+      {/* Chart and Trading Section - Responsive Layout */}
+      {bondingCurveAddress && (
+        <div className="lg:grid lg:grid-cols-3 lg:gap-6">
+          {/* Price Chart - Takes 2/3 of space on lg screens */}
+          <div className="lg:col-span-2 mb-6 lg:mb-0">
+            <PriceChart
+              data={chartData}
+              timeframe={chartTimeframe}
+              onTimeframeChange={handleTimeframeChange}
+              availableTimeframes={availableTimeframes}
+              isLoading={isChartLoading}
+              symbol={tokenInfo.symbol || "Token"}
+            />
           </div>
-        )}
 
-        <div>
-          <h3 className="text-lg font-medium text-gray-300">Provider Token</h3>
-          {tokenInfo.address ? (
-            <div>
-              <p className="text-gray-400 mb-1">
-                <span className="font-medium">Name:</span>{" "}
-                {tokenInfo.name || "Unknown"}
-              </p>
-              <p className="text-gray-400 mb-1">
-                <span className="font-medium">Symbol:</span>{" "}
-                {tokenInfo.symbol || "Unknown"}
-              </p>
-              <p className="text-gray-400 mb-1 break-words">
-                <span className="font-medium">Address:</span>{" "}
-                {tokenInfo.address}
-              </p>
-              {tokenInfo.balance !== null && (
-                <p className="text-gray-400 mb-1">
-                  <span className="font-medium">Your Balance:</span>{" "}
-                  {Number(tokenInfo.balance).toFixed(4)}{" "}
-                  {tokenInfo.symbol || "tokens"}
-                </p>
-              )}
-              {tokenInfo.balance === null && tokenInfo.address && (
-                <p className="text-yellow-400 text-sm mt-2">
-                  Connect your wallet to view token balance
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="text-yellow-400">
-              No provider token found for this service.
-            </p>
-          )}
-        </div>
-
-        <div>
-          <h3 className="text-lg font-medium text-gray-300">Bonding Curve</h3>
-          {bondingCurveAddress ? (
-            <div>
-              <p className="text-gray-400 break-words mb-2">
-                {bondingCurveAddress}
-              </p>
-              <div className="bg-gray-700 p-3 rounded-md mt-2">
-                <p className="text-gray-300 mb-1">
-                  <span className="font-medium">Current Price:</span>{" "}
-                  {Number(bondingCurveInfo.currentPrice).toFixed(6)} CORDEX
-                </p>
-                <p className="text-gray-300 mb-1">
-                  <span className="font-medium">Token Supply:</span>{" "}
-                  {Number(bondingCurveInfo.tokenSupply).toFixed(4)}{" "}
-                  {tokenInfo.symbol || "tokens"}
-                </p>
+          {/* Right Column - Trading UI and Addresses */}
+          <div className="lg:col-span-1">
+            {/* Trading UI */}
+            {tokenInfo.address && (
+              <div className="border-t border-gray-700 pt-4 lg:border-t-0 lg:pt-0">
+                <TokenTrading
+                  tokenSymbol={tokenInfo.symbol || ""}
+                  tokenAddress={tokenInfo.address}
+                  buyState={buyState}
+                  sellState={sellState}
+                  successInfo={successInfo}
+                  blockExplorerUrl={blockExplorerUrl || null}
+                  activeTab={activeTab}
+                  tokenBalance={tokenInfo.balance}
+                  handleBuyAmountChange={handleBuyAmountChange}
+                  handleSellAmountChange={handleSellAmountChange}
+                  approveBuy={approveBuy}
+                  approveSell={approveSell}
+                  executeBuy={executeBuy}
+                  executeSell={executeSell}
+                  setActiveTab={setActiveTab}
+                  clearSuccessMessage={clearSuccessMessage}
+                />
               </div>
+            )}
+
+            {/* Condensed Address Information */}
+            <div className="mt-4 pt-4 border-t border-gray-700 flex flex-col text-sm space-y-2">
+              {tokenInfo.address && (
+                <div className="flex items-center">
+                  <span className="text-gray-400 mr-2 w-16">Token:</span>
+                  <CopyableHash hash={tokenInfo.address} />
+                </div>
+              )}
+
+              <div className="flex items-center">
+                <span className="text-gray-400 mr-2 w-16">Provider:</span>
+                <CopyableHash hash={providerContractAddress} />
+              </div>
+
+              {bondingCurveAddress && (
+                <div className="flex items-center">
+                  <span className="text-gray-400 mr-2 w-16">Price:</span>
+                  <span className="text-gray-300">
+                    {Number(bondingCurveInfo.currentPrice).toFixed(6)} CORDEX
+                  </span>
+                </div>
+              )}
             </div>
-          ) : (
-            <p className="text-yellow-400">
-              No bonding curve contract linked to this token.
-            </p>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
