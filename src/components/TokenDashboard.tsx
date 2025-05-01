@@ -19,6 +19,8 @@ export default function TokenDashboard({
     sellState,
     isLoading,
     error,
+    successInfo,
+    blockExplorerUrl,
     // Chart state
     chartData,
     chartTimeframe,
@@ -35,6 +37,8 @@ export default function TokenDashboard({
     executeBuy,
     executeSell,
     handleTimeframeChange,
+    clearSuccessMessage,
+    clearErrorMessage,
   } = useTokenDashboard(providerContractAddress);
 
   if (isLoading) {
@@ -64,6 +68,44 @@ export default function TokenDashboard({
   return (
     <div className="mt-8 p-4 bg-gray-800 rounded border border-gray-700">
       <h2 className="text-xl font-semibold mb-4">Token Information</h2>
+
+      {/* Display Error Message */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-900 border border-red-700 rounded-md text-red-200 flex justify-between items-center">
+          <span>{error}</span>
+          <button
+            onClick={clearErrorMessage}
+            className="text-red-200 hover:text-white font-bold"
+          >
+            X
+          </button>
+        </div>
+      )}
+
+      {/* Display Success Message */}
+      {successInfo && (
+        <div className="mb-4 p-3 bg-green-900 border border-green-700 rounded-md text-green-200 flex justify-between items-center">
+          <div>
+            <span>{successInfo.message}</span>
+            {blockExplorerUrl && successInfo.txHash && (
+              <a
+                href={`${blockExplorerUrl}/tx/${successInfo.txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 underline hover:text-green-100 text-xs"
+              >
+                View Transaction
+              </a>
+            )}
+          </div>
+          <button
+            onClick={clearSuccessMessage}
+            className="text-green-200 hover:text-white font-bold"
+          >
+            X
+          </button>
+        </div>
+      )}
 
       <div className="space-y-6">
         <div>

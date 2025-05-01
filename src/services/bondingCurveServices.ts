@@ -1,4 +1,11 @@
-import { parseEther, maxUint256, formatEther } from "viem";
+import {
+  parseEther,
+  maxUint256,
+  formatEther,
+  TransactionReceipt,
+  PublicClient,
+  Hash,
+} from "viem";
 import { useWriteContract, usePublicClient } from "wagmi";
 
 // Import ABIs
@@ -88,18 +95,32 @@ export const getTokenAllowance = async (
   }
 };
 
-export const approveTokens = (
-  writeContract: ReturnType<typeof useWriteContract>["writeContract"],
+export const approveTokens = async (
+  publicClient: PublicClient | undefined,
+  writeContractAsync: ReturnType<typeof useWriteContract>["writeContractAsync"],
   tokenAddress: `0x${string}`,
   spender: `0x${string}`,
   amount: bigint
-) => {
-  return writeContract({
+): Promise<TransactionReceipt | null> => {
+  if (!publicClient) {
+    console.error(
+      "[bondingCurveServices] Public client not available for approveTokens."
+    );
+    return null;
+  }
+  const txHash = await writeContractAsync({
     address: tokenAddress,
     abi: erc20Abi,
     functionName: "approve",
     args: [spender, amount],
   });
+
+  console.log("[bondingCurveServices] Approve transaction hash:", txHash);
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: txHash,
+  });
+  console.log("[bondingCurveServices] Approve transaction confirmed:", receipt);
+  return receipt;
 };
 
 export const getBondingCurveContract = async (
@@ -305,28 +326,56 @@ export const getCordexTokenAddress = async (
   }
 };
 
-export const buyTokens = (
-  writeContract: ReturnType<typeof useWriteContract>["writeContract"],
+export const buyTokens = async (
+  publicClient: PublicClient | undefined,
+  writeContractAsync: ReturnType<typeof useWriteContract>["writeContractAsync"],
   bondingCurveAddress: `0x${string}`,
   tokenAmount: bigint
-) => {
-  return writeContract({
+): Promise<TransactionReceipt | null> => {
+  if (!publicClient) {
+    console.error(
+      "[bondingCurveServices] Public client not available for buyTokens."
+    );
+    return null;
+  }
+  const txHash = await writeContractAsync({
     address: bondingCurveAddress,
     abi: bondingCurveAbi,
     functionName: "buyTokens",
     args: [tokenAmount],
   });
+
+  console.log("[bondingCurveServices] Buy transaction hash:", txHash);
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: txHash,
+  });
+  console.log("[bondingCurveServices] Buy transaction confirmed:", receipt);
+  return receipt;
 };
 
-export const sellTokens = (
-  writeContract: ReturnType<typeof useWriteContract>["writeContract"],
+export const sellTokens = async (
+  publicClient: PublicClient | undefined,
+  writeContractAsync: ReturnType<typeof useWriteContract>["writeContractAsync"],
   bondingCurveAddress: `0x${string}`,
   tokenAmount: bigint
-) => {
-  return writeContract({
+): Promise<TransactionReceipt | null> => {
+  if (!publicClient) {
+    console.error(
+      "[bondingCurveServices] Public client not available for sellTokens."
+    );
+    return null;
+  }
+  const txHash = await writeContractAsync({
     address: bondingCurveAddress,
     abi: bondingCurveAbi,
     functionName: "sellTokens",
     args: [tokenAmount],
   });
+
+  console.log("[bondingCurveServices] Sell transaction hash:", txHash);
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: txHash,
+  });
+  console.log("[bondingCurveServices] Sell transaction confirmed:", receipt);
+  return receipt;
 };
