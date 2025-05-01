@@ -49,7 +49,7 @@ function TokenDisplay({ providerContractAddress }: TokenDisplayProps) {
   if (typedError) {
     const errorMessage = typedError.message || String(typedError);
     return (
-      <p className="text-red-500" title={errorMessage}>
+      <p className="text-cordex-red" title={errorMessage}>
         Token Error
       </p>
     );
@@ -60,7 +60,7 @@ function TokenDisplay({ providerContractAddress }: TokenDisplayProps) {
       <div className="flex justify-between items-center">
         <span className="text-gray-400 font-medium">{tokenInfo.symbol}</span>
         <span className="text-gray-300">
-          Market Cap: {formatMarketCap(marketCap)} CORDEX
+          market cap: {formatMarketCap(marketCap)} CRDX
         </span>
       </div>
     );
@@ -79,7 +79,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
   return (
     <Link
       href={`/service/${service.id}`}
-      className="flex flex-row items-center justify-start gap-4 p-4 border-1 hover:border-white transition-all duration-300 border-gray-700"
+      className="flex flex-row items-center justify-start gap-4 p-4 border-1 hover:border-white transition-all duration-300 border-gray-700 cursor-pointer"
     >
       <div className="w-24 h-24 relative overflow-hidden">
         {service.image ? (
@@ -105,7 +105,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
           {service.endpoint || "No endpoint"}
         </p>
         {/* Token Info Section */}
-        <div className="mt-auto pt-2 border-t border-gray-800 text-xs">
+        <div className="mt-auto pt-2 text-xs">
           {isValidAddress ? (
             <TokenDisplay
               providerContractAddress={

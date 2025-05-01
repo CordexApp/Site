@@ -8,7 +8,7 @@ interface GridProps {
 export function Grid({ services }: GridProps) {
   if (services.length === 0) {
     return (
-      <div className="w-full mt-6 bg-gray-900 rounded-md p-8 text-center">
+      <div className="w-full mt-6 bg-gray-900 p-8 text-center">
         <p className="text-gray-400">No services available</p>
       </div>
     );

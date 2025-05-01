@@ -139,7 +139,7 @@ export default function ServiceHealthIndicator({
     <span className="flex items-center">
       <span
         className={`h-3 w-3 rounded-full ${
-          healthStatus.isHealthy ? "bg-green-500" : "bg-red-500"
+          healthStatus.isHealthy ? "bg-green-500" : "bg-cordex-red"
         } mr-2`}
       ></span>
       <span className="">

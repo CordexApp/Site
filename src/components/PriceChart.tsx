@@ -49,8 +49,8 @@ export default function PriceChart({
         textColor: "#D1D5DB",
       },
       grid: {
-        vertLines: { color: "#334155" },
-        horzLines: { color: "#334155" },
+        vertLines: { color: "#1a1a1a" },
+        horzLines: { color: "#1a1a1a" },
       },
       crosshair: {
         mode: 0, // Normal crosshair mode
@@ -66,12 +66,12 @@ export default function PriceChart({
     });
 
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: "#10B981",
-      downColor: "#EF4444",
-      borderDownColor: "#EF4444",
-      borderUpColor: "#10B981",
-      wickDownColor: "#EF4444",
-      wickUpColor: "#10B981",
+      upColor: "#33ff00",
+      downColor: "#ff0000",
+      borderDownColor: "#ff0000",
+      borderUpColor: "#33ff00",
+      wickDownColor: "#ff0000",
+      wickUpColor: "#33ff00",
     });
 
     chartRef.current = chart;
@@ -178,9 +178,7 @@ export default function PriceChart({
   return (
     <div className="flex flex-col space-y-2">
       <div className="flex justify-between items-center mb-2">
-        <h3 className="text-lg font-medium text-gray-white">
-          {symbol} Price Chart
-        </h3>
+        <h3 className="text-lg font-medium text-gray-white">{symbol} / CRDX</h3>
 
         <div className="flex space-x-1">
           {availableTimeframes.map((tf) => (
@@ -199,10 +197,7 @@ export default function PriceChart({
         </div>
       </div>
 
-      <div
-        ref={chartContainerRef}
-        className="relative h-[400px] w-full rounded-md border border-gray-700"
-      >
+      <div ref={chartContainerRef} className="relative h-[400px] w-full">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-10">
             <LoadingDots text="Loading chart data" />

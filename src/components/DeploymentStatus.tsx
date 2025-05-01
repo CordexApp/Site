@@ -21,7 +21,7 @@ export default function DeploymentStatus() {
 
   if (status === "error") {
     return (
-      <div className="text-red-500 mt-4">
+      <div className="text-cordex-red mt-4">
         <h4>deployment failed</h4>
         <p className="lowercase">{errorMessage}</p>
         {txHash && (

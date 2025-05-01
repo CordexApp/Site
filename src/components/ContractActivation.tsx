@@ -75,7 +75,7 @@ export default function ContractActivation() {
 
   return (
     <div>
-      {error && <div className="text-red-400">{error}</div>}
+      {error && <div className="text-cordex-red">{error}</div>}
 
       <PrimaryButton
         onClick={() => handleStatusChange(!isActive)}

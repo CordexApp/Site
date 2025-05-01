@@ -669,7 +669,7 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
         );
         setBuyState((prev) => ({ ...prev, hasAllowance: true }));
         setSuccessInfo({
-          message: "CORDEX Approved Successfully!",
+          message: "cordex approved successfully!",
           txHash: receipt.transactionHash,
         });
       } else {
@@ -677,12 +677,12 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
           "[useTokenDashboard] Approve transaction failed or receipt not received/failed.",
           receipt
         );
-        setError("Failed to approve CORDEX tokens");
+        setError("failed to approve cordex tokens");
         setSuccessInfo(null);
       }
     } catch (err) {
       console.error("[useTokenDashboard] Error approving Cordex tokens:", err);
-      setError("Failed to approve CORDEX tokens");
+      setError("failed to approve cordex tokens");
       setSuccessInfo(null);
     } finally {
       setBuyState((prev) => ({ ...prev, isApproving: false }));
@@ -723,7 +723,9 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
         );
         setSellState((prev) => ({ ...prev, hasAllowance: true }));
         setSuccessInfo({
-          message: `${tokenInfo.symbol || "Tokens"} Approved Successfully!`,
+          message: `${
+            tokenInfo.symbol?.toLowerCase() || "tokens"
+          } approved successfully!`,
           txHash: receipt.transactionHash,
         });
       } else {
@@ -731,7 +733,7 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
           "[useTokenDashboard] Approve transaction failed or receipt not received/failed.",
           receipt
         );
-        setError("Failed to approve provider tokens");
+        setError("failed to approve provider tokens");
         setSuccessInfo(null);
       }
     } catch (err) {
@@ -739,7 +741,7 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
         "[useTokenDashboard] Error approving provider tokens:",
         err
       );
-      setError("Failed to approve provider tokens");
+      setError("failed to approve provider tokens");
       setSuccessInfo(null);
     } finally {
       setSellState((prev) => ({ ...prev, isApproving: false }));
@@ -781,8 +783,8 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
           estimatedCost: "0",
         }));
         setSuccessInfo({
-          message: `Successfully bought ${boughtAmount} ${
-            tokenInfo.symbol || "Tokens"
+          message: `successfully bought ${boughtAmount} ${
+            tokenInfo.symbol?.toLowerCase() || "tokens"
           }!`,
           txHash: receipt.transactionHash,
         });
@@ -793,12 +795,12 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
           "[useTokenDashboard] Buy transaction failed or receipt not received/failed.",
           receipt
         );
-        setError("Buy transaction failed or confirmation timed out.");
+        setError("buy transaction failed or confirmation timed out.");
         setSuccessInfo(null);
       }
     } catch (err) {
       console.error("[useTokenDashboard] Error buying tokens:", err);
-      setError("Failed to buy tokens");
+      setError("failed to buy tokens");
       setSuccessInfo(null);
     } finally {
       setBuyState((prev) => ({ ...prev, isProcessing: false }));
@@ -840,8 +842,8 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
           estimatedCost: "0",
         }));
         setSuccessInfo({
-          message: `Successfully sold ${soldAmount} ${
-            tokenInfo.symbol || "Tokens"
+          message: `successfully sold ${soldAmount} ${
+            tokenInfo.symbol?.toLowerCase() || "tokens"
           }!`,
           txHash: receipt.transactionHash,
         });
@@ -852,12 +854,12 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
           "[useTokenDashboard] Sell transaction failed or receipt not received/failed.",
           receipt
         );
-        setError("Sell transaction failed or confirmation timed out.");
+        setError("sell transaction failed or confirmation timed out.");
         setSuccessInfo(null);
       }
     } catch (err) {
       console.error("[useTokenDashboard] Error selling tokens:", err);
-      setError("Failed to sell tokens");
+      setError("failed to sell tokens");
       setSuccessInfo(null);
     } finally {
       setSellState((prev) => ({ ...prev, isProcessing: false }));

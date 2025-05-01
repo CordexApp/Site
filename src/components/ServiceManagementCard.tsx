@@ -17,7 +17,9 @@ export function ServiceManagementCard({ service }: ServiceManagementCardProps) {
           <div className="flex items-center mb-2">
             <span className="text-gray-400 mr-2">Status:</span>
             <span
-              className={service.isActive ? "text-green-400" : "text-red-400"}
+              className={
+                service.isActive ? "text-green-400" : "text-cordex-red"
+              }
             >
               {service.isActive ? "Active" : "Inactive"}
             </span>

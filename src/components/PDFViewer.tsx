@@ -48,7 +48,7 @@ export default function PDFViewer({ pdfPath }: PDFViewerProps) {
   return (
     <>
       {pdfError && (
-        <div className="text-red-500 mb-4 p-3 bg-red-100 bg-opacity-10">
+        <div className="text-cordex-red mb-4 p-3 bg-red-100 bg-opacity-10">
           Error loading PDF: {pdfError}
         </div>
       )}

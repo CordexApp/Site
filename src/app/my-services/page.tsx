@@ -20,7 +20,7 @@ function MyServicesContent() {
 
   if (error) {
     return (
-      <div className="my-8 text-red-400">
+      <div className="my-8 text-cordex-red">
         <p>Error: {error}</p>
       </div>
     );

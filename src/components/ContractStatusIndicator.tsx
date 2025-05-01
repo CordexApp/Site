@@ -103,7 +103,7 @@ export default function ContractStatusIndicator({
     <span className="flex items-center">
       <span
         className={`h-3 w-3 rounded-full ${
-          status.isActive ? "bg-green-500" : "bg-red-500"
+          status.isActive ? "bg-green-500" : "bg-cordex-red"
         } mr-2`}
       ></span>
       <span className="">

@@ -2,6 +2,8 @@ import React from "react";
 import { NumericInput } from "./ui/NumericInput";
 import { PrimaryButton } from "./ui/PrimaryButton";
 import { LoadingDots } from "./ui/LoadingDots";
+import { InputLabel } from "./ui";
+import { SecondaryButton } from "./ui/SecondaryButton";
 
 interface TokenTradingProps {
   tokenSymbol: string;
@@ -65,35 +67,32 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
     <div>
       {/* Display Success Message */}
       {successInfo && (
-        <div className="mb-4 p-3 bg-cordex-green text-black flex justify-between items-center">
+        <div className="mb-4 text-white flex justify-between items-center">
           <div>
-            <span>{successInfo.message}</span>
+            <div>{successInfo.message}</div>
             {blockExplorerUrl && successInfo.txHash && (
-              <a
+              <SecondaryButton
                 href={`${blockExplorerUrl}/tx/${successInfo.txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-2 underline hover:text-green-100 text-xs"
               >
-                View Transaction
-              </a>
+                view transaction
+              </SecondaryButton>
             )}
           </div>
           <button
             onClick={clearSuccessMessage}
-            className="text-black hover:text-white"
+            className="text-white hover:text-white"
           >
             &times;
           </button>
         </div>
       )}
 
-      <h3 className="text-xl font-medium text-gray-100 mb-4">Trade Tokens</h3>
+      <h3 className="text-xl font-medium text-gray-100 mb-4">trade tokens</h3>
 
       {/* ADDED: Token balance display */}
       {tokenBalance !== null && tokenBalance !== undefined && (
         <div className="text-sm text-gray-400 mb-3">
-          Your Balance: {Number(tokenBalance).toFixed(4)}{" "}
+          your balance: {Number(tokenBalance).toFixed(4)}{" "}
           {tokenSymbol || "tokens"}
         </div>
       )}
@@ -102,22 +101,22 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
         <button
           className={`px-4 py-2 text-sm font-medium ${
             activeTab === "buy"
-              ? "text-blue-400 border-b-2 border-blue-400"
+              ? "text-white border-b-2 border-white"
               : "text-gray-400 hover:text-gray-300"
           }`}
           onClick={() => setActiveTab("buy")}
         >
-          Buy Tokens
+          buy tokens
         </button>
         <button
           className={`px-4 py-2 text-sm font-medium ${
             activeTab === "sell"
-              ? "text-blue-400 border-b-2 border-blue-400"
+              ? "text-white border-b-2 border-white"
               : "text-gray-400 hover:text-gray-300"
           }`}
           onClick={() => setActiveTab("sell")}
         >
-          Sell Tokens
+          sell tokens
         </button>
       </div>
 
@@ -125,15 +124,14 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
         {activeTab === "buy" ? (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Amount of {tokenSymbol || "tokens"} to buy
-              </label>
+              <InputLabel>
+                amount of {tokenSymbol || "tokens"} to buy
+              </InputLabel>
               <div className="flex items-center space-x-2">
                 <NumericInput
                   value={buyState.amount}
                   onChange={(e) => handleBuyAmountChange(e.target.value)}
                   placeholder="0.0"
-                  className="bg-gray-700 border border-gray-600 text-white p-2 rounded-md w-full"
                   disabled={buyState.isProcessing || buyState.isApproving}
                   allowDecimal={true}
                 />
@@ -144,9 +142,9 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
             </div>
 
             {buyState.amount && Number(buyState.amount) > 0 && (
-              <div className="bg-gray-700 p-2 rounded-md">
+              <div className="">
                 <p className="text-sm text-gray-300">
-                  Estimated cost: {Number(buyState.estimatedCost).toFixed(6)}{" "}
+                  estimated cost: {Number(buyState.estimatedCost).toFixed(6)}{" "}
                   CORDEX
                 </p>
               </div>
@@ -162,9 +160,9 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
                 }
               >
                 {buyState.isProcessing ? (
-                  <LoadingDots text={`Buying ${tokenSymbol || "Tokens"}...`} />
+                  <LoadingDots text={`buying ${tokenSymbol || "tokens"}`} />
                 ) : (
-                  `Buy ${tokenSymbol || "Tokens"}`
+                  `buy ${tokenSymbol || "tokens"}`
                 )}
               </PrimaryButton>
             ) : (
@@ -173,9 +171,9 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
                 disabled={buyState.isApproving}
               >
                 {buyState.isApproving ? (
-                  <LoadingDots text="Approving CORDEX" />
+                  <LoadingDots text="setting spending cap" />
                 ) : (
-                  "Approve CORDEX"
+                  "set spending cap"
                 )}
               </PrimaryButton>
             )}
@@ -183,15 +181,12 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
         ) : (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Amount of {tokenSymbol || "tokens"} to sell
-              </label>
+              <InputLabel>amount of CORDEX to sell</InputLabel>
               <div className="flex items-center space-x-2 w-full">
                 <NumericInput
                   value={sellState.amount}
                   onChange={(e) => handleSellAmountChange(e.target.value)}
                   placeholder="0.0"
-                  className="bg-gray-700 border border-gray-600 text-white p-2 rounded-md w-full"
                   disabled={sellState.isProcessing || sellState.isApproving}
                   allowDecimal={true}
                 />
@@ -202,16 +197,18 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
             </div>
 
             {sellState.amount && Number(sellState.amount) > 0 && (
-              <div className="bg-gray-700 p-2 rounded-md">
+              <div className="">
                 <p className="text-sm text-gray-300">
-                  Estimated payout: {Number(sellState.estimatedCost).toFixed(6)}{" "}
+                  estimated payout: {Number(sellState.estimatedCost).toFixed(6)}{" "}
                   CORDEX
                 </p>
               </div>
             )}
 
             {hasInsufficientTokenBalance() && (
-              <p className="text-red-400 text-sm">Insufficient token balance</p>
+              <p className="text-cordex-red text-sm">
+                insufficient token balance
+              </p>
             )}
 
             {sellState.hasAllowance ? (
@@ -223,26 +220,22 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
                   Number(sellState.amount) <= 0 ||
                   hasInsufficientTokenBalance()
                 }
-                className="w-full"
               >
                 {sellState.isProcessing ? (
-                  <LoadingDots text={`Selling ${tokenSymbol || "Tokens"}...`} />
+                  <LoadingDots text={`selling ${tokenSymbol || "tokens"}`} />
                 ) : (
-                  `Sell ${tokenSymbol || "Tokens"}`
+                  `sell ${tokenSymbol || "tokens"}`
                 )}
               </PrimaryButton>
             ) : (
               <PrimaryButton
                 onClick={approveSell}
                 disabled={sellState.isApproving}
-                className="w-full"
               >
                 {sellState.isApproving ? (
-                  <LoadingDots
-                    text={`Approving ${tokenSymbol || "Tokens"}...`}
-                  />
+                  <LoadingDots text="setting spending cap" />
                 ) : (
-                  `Approve ${tokenSymbol || "Tokens"}`
+                  "set spending cap"
                 )}
               </PrimaryButton>
             )}

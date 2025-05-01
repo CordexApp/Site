@@ -160,7 +160,9 @@ export default function BondingCurveSetup() {
           )}
 
           {/* Error display */}
-          {error && !isProcessing && <div className="text-red-500">Error</div>}
+          {error && !isProcessing && (
+            <div className="text-cordex-red">Error</div>
+          )}
         </div>
       ) : (
         <p className="text-yellow-400">
