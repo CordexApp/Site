@@ -9,6 +9,8 @@ import {
   CandlestickData,
   UTCTimestamp,
   CandlestickSeries,
+  LastPriceAnimationMode,
+  Time,
 } from "lightweight-charts";
 import { OHLCVCandle } from "@/services/tradingDataService";
 
@@ -30,19 +32,15 @@ export default function PriceChart({
   symbol = "Token",
 }: PriceChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const [chart, setChart] = useState<IChartApi | null>(null);
-  const [series, setSeries] = useState<ISeriesApi<"Candlestick"> | null>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const lastAppliedDataRef = useRef<CandlestickData[]>([]);
 
   // Set up chart
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    // Clear existing chart if exists
-    if (chart) {
-      chart.remove();
-    }
-
-    const newChart = createChart(chartContainerRef.current, {
+    const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: 400,
       layout: {
@@ -59,29 +57,31 @@ export default function PriceChart({
       timeScale: {
         borderColor: "#334155",
         timeVisible: true,
-        secondsVisible: false,
+        secondsVisible: timeframe === "1m" || timeframe === "5m",
       },
       rightPriceScale: {
         borderColor: "#334155",
       },
     });
 
-    const newSeries = newChart.addSeries(CandlestickSeries, {
+    const series = chart.addSeries(CandlestickSeries, {
       upColor: "#10B981",
       downColor: "#EF4444",
       borderDownColor: "#EF4444",
       borderUpColor: "#10B981",
       wickDownColor: "#EF4444",
       wickUpColor: "#10B981",
+      // lastPriceAnimation: LastPriceAnimationMode.Continuous, // Temporarily removed
     });
 
-    setChart(newChart);
-    setSeries(newSeries);
+    chartRef.current = chart;
+    seriesRef.current = series;
+    lastAppliedDataRef.current = [];
 
     // Handle window resize
     const handleResize = () => {
-      if (chartContainerRef.current && newChart) {
-        newChart.applyOptions({
+      if (chartContainerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({
           width: chartContainerRef.current.clientWidth,
         });
       }
@@ -91,29 +91,69 @@ export default function PriceChart({
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      newChart.remove();
+      chartRef.current?.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
     };
-  }, []);
+  }, [timeframe]);
 
-  // Update chart data when data changes
+  // Update chart data when data prop changes
   useEffect(() => {
-    if (series && data && data.length > 0) {
-      const chartData = data.map((candle) => ({
-        time: candle.time as UTCTimestamp,
-        open: parseFloat(candle.open),
-        high: parseFloat(candle.high),
-        low: parseFloat(candle.low),
-        close: parseFloat(candle.close),
-      }));
+    const series = seriesRef.current;
+    const chart = chartRef.current;
+    if (!series || !chart || !data) return;
 
-      series.setData(chartData);
+    const newChartData: CandlestickData[] = data.map((candle) => ({
+      time: candle.time as UTCTimestamp,
+      open: parseFloat(candle.open),
+      high: parseFloat(candle.high),
+      low: parseFloat(candle.low),
+      close: parseFloat(candle.close),
+    }));
 
-      if (chart && chartData.length > 0) {
-        // Fit content
-        chart.timeScale().fitContent();
-      }
+    if (newChartData.length === 0) {
+      series.setData([]);
+      lastAppliedDataRef.current = [];
+      return;
     }
-  }, [data, series, chart]);
+
+    const lastAppliedData = lastAppliedDataRef.current;
+
+    // Check if this is likely an incremental update (polling)
+    // Condition: new data has 1+ items, last applied has items, last new candle time > last applied candle time
+    const isIncrementalUpdate =
+      newChartData.length > 0 &&
+      lastAppliedData.length > 0 &&
+      newChartData[newChartData.length - 1].time >
+        lastAppliedData[lastAppliedData.length - 1].time;
+
+    if (isIncrementalUpdate) {
+      // Check if the update is just appending or replacing the last candle
+      const newLastCandle = newChartData[newChartData.length - 1];
+      const oldLastCandle = lastAppliedData[lastAppliedData.length - 1];
+
+      if (newLastCandle.time === oldLastCandle.time) {
+        // Update the last candle if timestamp is the same (current interval update)
+        console.log("[PriceChart] Updating last candle:", newLastCandle);
+        series.update(newLastCandle);
+        lastAppliedDataRef.current[lastAppliedData.length - 1] = newLastCandle;
+      } else {
+        // Append the new candle if timestamp is different (new interval)
+        console.log("[PriceChart] Appending new candle:", newLastCandle);
+        series.update(newLastCandle);
+        lastAppliedDataRef.current.push(newLastCandle);
+        chart.timeScale().scrollToRealTime();
+      }
+    } else {
+      // Otherwise, assume it's a full data replacement (initial load, timeframe change)
+      console.log(
+        "[PriceChart] Setting full data (length: " + newChartData.length + ")"
+      );
+      series.setData(newChartData);
+      lastAppliedDataRef.current = newChartData;
+      chart.timeScale().fitContent();
+    }
+  }, [data]);
 
   // Format display text for timeframe
   const formatTimeframe = (tf: string) => {

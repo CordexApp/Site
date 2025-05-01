@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
-import { usePublicClient, useAccount, useWriteContract } from "wagmi";
+import {
+  usePublicClient,
+  useAccount,
+  useWriteContract,
+  useWatchContractEvent,
+} from "wagmi";
 import {
   findBondingCurveForProviderToken,
   getProviderTokensForWallet,
@@ -18,7 +23,17 @@ import {
   getAvailableTimeframes,
   OHLCVCandle,
 } from "@/services/tradingDataService";
-import { formatEther, parseEther, maxUint256 } from "viem";
+import {
+  formatEther,
+  parseEther,
+  maxUint256,
+  Abi,
+  decodeEventLog,
+  parseAbiItem,
+  Log,
+} from "viem";
+import { ERC20Abi } from "@/abis/ERC20";
+import { BondingCurveAbi } from "@/abis/BondingCurveContract";
 
 interface TokenInfo {
   address: `0x${string}` | null;
@@ -107,6 +122,34 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
 
   // Base URL for block explorer (adjust based on actual network)
   const blockExplorerUrl = chain?.blockExplorers?.default.url;
+
+  // Function to refresh just the token balance
+  const refreshTokenBalance = async () => {
+    if (!publicClient || !walletAddress || !tokenInfo.address) {
+      // Can't fetch balance if client, wallet, or token address is missing
+      return;
+    }
+    try {
+      const balanceBigInt = (await publicClient.readContract({
+        address: tokenInfo.address,
+        abi: ERC20Abi as Abi,
+        functionName: "balanceOf",
+        args: [walletAddress],
+      })) as bigint;
+      const newBalance = formatEther(balanceBigInt);
+      console.log(`[TokenDashboard] Refreshed balance: ${newBalance}`);
+      // Only update state if balance actually changed to avoid unnecessary re-renders
+      setTokenInfo((prev) => {
+        if (prev.balance !== newBalance) {
+          return { ...prev, balance: newBalance };
+        }
+        return prev;
+      });
+    } catch (err) {
+      console.error("[TokenDashboard] Error fetching token balance:", err);
+      // Don't set main error state for just a balance refresh failure
+    }
+  };
 
   // Function to refresh bonding curve data
   const refreshBondingCurveInfo = async (
@@ -258,6 +301,11 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
   const handleTimeframeChange = (timeframe: string) => {
     setChartTimeframe(timeframe);
   };
+
+  // Define the event ABI item string for parsing
+  const tradeActivityEventAbi = parseAbiItem(
+    "event TradeActivity(address indexed user, bool indexed isBuy, uint256 timestamp, uint256 tokenAmount, uint256 pricePerToken, uint256 totalVolume, uint256 poolLiquidity)"
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -445,6 +493,75 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
       fetchChartData();
     }
   }, [bondingCurveAddress, chartTimeframe]);
+
+  // Add Contract Event Listener
+  useWatchContractEvent({
+    address: bondingCurveAddress || undefined,
+    abi: [tradeActivityEventAbi],
+    eventName: "TradeActivity",
+    enabled: !!bondingCurveAddress,
+    onLogs(logs: Log[]) {
+      console.log("[useTokenDashboard] TradeActivity Event Received:", logs);
+      logs.forEach((log) => {
+        try {
+          // Ensure log structure is valid before decoding
+          if (log.data && log.topics) {
+            const decodedLog = decodeEventLog({
+              abi: [tradeActivityEventAbi],
+              data: log.data,
+              topics: log.topics,
+            });
+
+            // Check if decoding was successful and args exist
+            if (decodedLog && decodedLog.args) {
+              const args = decodedLog.args as {
+                user?: `0x${string}` /* other args */;
+              };
+              console.log("[useTokenDashboard] Decoded Event Args:", args);
+
+              // Refresh general data on any trade
+              refreshBondingCurveInfo();
+              fetchChartData();
+
+              // If the trade involved the current user, refresh their balance
+              if (
+                args.user &&
+                walletAddress &&
+                args.user.toLowerCase() === walletAddress.toLowerCase()
+              ) {
+                console.log(
+                  "[useTokenDashboard] Trade event matches current user, refreshing balance..."
+                );
+                refreshTokenBalance();
+              }
+            } else {
+              console.error(
+                "[useTokenDashboard] Failed to decode event args:",
+                log
+              );
+            }
+          } else {
+            console.error(
+              "[useTokenDashboard] Log missing data or topics:",
+              log
+            );
+          }
+        } catch (e) {
+          console.error(
+            "[useTokenDashboard] Error processing TradeActivity event:",
+            e,
+            log
+          );
+        }
+      });
+    },
+    onError(error) {
+      console.error(
+        "[useTokenDashboard] Error watching TradeActivity events:",
+        error
+      );
+    },
+  });
 
   // Handlers for buy amount changes
   const handleBuyAmountChange = async (amount: string) => {
@@ -643,18 +760,20 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
 
       if (receipt && receipt.status === "success") {
         console.log("[useTokenDashboard] Buy transaction confirmed:", receipt);
+        const boughtAmount = buyState.amount;
         setBuyState((prev) => ({
           ...prev,
           amount: "",
           estimatedCost: "0",
         }));
         setSuccessInfo({
-          message: `Successfully bought ${buyState.amount} ${
+          message: `Successfully bought ${boughtAmount} ${
             tokenInfo.symbol || "Tokens"
           }!`,
           txHash: receipt.transactionHash,
         });
-        refreshBondingCurveInfo(bondingCurveAddress);
+        await refreshBondingCurveInfo();
+        await refreshTokenBalance();
       } else {
         console.error(
           "[useTokenDashboard] Buy transaction failed or receipt not received/failed.",
@@ -700,18 +819,20 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
 
       if (receipt && receipt.status === "success") {
         console.log("[useTokenDashboard] Sell transaction confirmed:", receipt);
+        const soldAmount = sellState.amount;
         setSellState((prev) => ({
           ...prev,
           amount: "",
           estimatedCost: "0",
         }));
         setSuccessInfo({
-          message: `Successfully sold ${sellState.amount} ${
+          message: `Successfully sold ${soldAmount} ${
             tokenInfo.symbol || "Tokens"
           }!`,
           txHash: receipt.transactionHash,
         });
-        refreshBondingCurveInfo(bondingCurveAddress);
+        await refreshBondingCurveInfo();
+        await refreshTokenBalance();
       } else {
         console.error(
           "[useTokenDashboard] Sell transaction failed or receipt not received/failed.",
