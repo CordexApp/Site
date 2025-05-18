@@ -38,16 +38,21 @@ export function Slider({
 
   return (
     <div className={`w-full ${className}`}>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value[0]}
-        onChange={handleChange}
-        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-      />
-      <div className="flex justify-between text-xs text-gray-500 mt-1">
+      <div className="relative">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value[0]}
+          onChange={handleChange}
+          className="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/30"
+          style={{
+            backgroundImage: `linear-gradient(to right, white ${position}%, rgba(255, 255, 255, 0.1) ${position}%)`,
+          }}
+        />
+      </div>
+      <div className="flex justify-between text-xs text-gray-400 mt-1">
         <span>{min}%</span>
         <span>{max}%</span>
       </div>
