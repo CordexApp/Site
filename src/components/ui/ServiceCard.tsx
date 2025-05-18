@@ -1,9 +1,9 @@
 "use client";
 
+import { useTokenDashboard } from "@/hooks/useTokenDashboard";
+import { Service } from "@/types/service";
 import Image from "next/image";
 import Link from "next/link";
-import { Service } from "@/types/service";
-import { useTokenDashboard } from "@/hooks/useTokenDashboard";
 
 interface ServiceCardProps {
   service: Service;
@@ -25,13 +25,13 @@ function TokenDisplay({ providerContractAddress }: TokenDisplayProps) {
   // Cast error type explicitly
   const typedError = tokenDataError as Error | null;
 
-  // Note: Hook returns price/supply as formatted decimal strings
-  const marketCap =
-    bondingCurveInfo?.currentPrice !== undefined &&
-    bondingCurveInfo?.tokenSupply !== undefined
-      ? parseFloat(bondingCurveInfo.currentPrice) *
-        parseFloat(bondingCurveInfo.tokenSupply)
-      : null;
+  // Fixed initial price of 0.1 CORDEX
+  const FIXED_INITIAL_PRICE = 0.1;
+
+  // Calculate market cap using total supply and fixed initial price
+  const marketCap = tokenInfo?.totalSupply
+    ? parseFloat(tokenInfo.totalSupply) * FIXED_INITIAL_PRICE
+    : null;
 
   // Helper function to format market cap
   const formatMarketCap = (cap: number | null) => {

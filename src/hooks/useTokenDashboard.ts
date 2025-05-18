@@ -41,6 +41,7 @@ export interface TokenInfo {
   name: string | null;
   symbol: string | null;
   balance: string | null;
+  totalSupply: string | null;
 }
 
 export interface BondingCurveInfo {
@@ -72,6 +73,7 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
     name: null,
     symbol: null,
     balance: null,
+    totalSupply: null,
   });
   const [bondingCurveInfo, setBondingCurveInfo] = useState<BondingCurveInfo>({
     currentPrice: "0",
@@ -310,146 +312,85 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!publicClient) {
+        console.error(
+          "[useTokenDashboard] Missing publicClient, cannot fetch data"
+        );
+        setError("Cannot connect to network");
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
-      setOwnerAddress(null);
-      setBondingCurveAddress(null);
-      setTokenInfo({ address: null, name: null, symbol: null, balance: null });
 
       try {
-        if (!publicClient) {
-          throw new Error("Public client not available");
-        }
+        console.log("[useTokenDashboard] Fetching data for:", providerContractAddress);
 
-        console.log(
-          `[TokenDashboard] Fetching data for provider contract: ${providerContractAddress}`
-        );
-
-        // Step 1: Get the owner address from the provider contract
-        const fetchedOwnerAddress = await getContractProvider(
+        // First, we need the owning provider's address and provider token
+        const provider = await getContractProvider(
           publicClient,
           providerContractAddress
         );
-
-        if (!fetchedOwnerAddress) {
-          throw new Error(
-            `Failed to get contract owner for ${providerContractAddress}`
-          );
+        console.log("[useTokenDashboard] Provider:", provider);
+        
+        if (!provider || provider === "0x0000000000000000000000000000000000000000") {
+          throw new Error("Provider address not found");
         }
-        setOwnerAddress(fetchedOwnerAddress);
-        console.log(
-          `[TokenDashboard] Found owner address: ${fetchedOwnerAddress}`
-        );
+        
+        setOwnerAddress(provider as `0x${string}`);
 
-        // Step 2: Get the service details from the backend using the provider contract address
-        const service = await getServiceByContractAddress(
-          providerContractAddress
-        );
+        // Then, get the service record from the backend
+        const service = await getServiceByContractAddress(providerContractAddress);
+        console.log("[useTokenDashboard] Service from backend:", service);
 
-        if (!service) {
-          throw new Error(
-            `Failed to fetch service details for contract ${providerContractAddress}`
-          );
+        if (!service || !service.coin_contract_address) {
+          throw new Error("Token information not available");
         }
 
-        if (!service.coin_contract_address) {
-          console.log(
-            `[TokenDashboard] Service ${service.id} does not have a coin_contract_address.`
-          );
-          setIsLoading(false);
-          return;
-        }
-
-        // Use the coin_contract_address from the service as the token address
         const tokenAddress = service.coin_contract_address as `0x${string}`;
-        console.log(
-          `[TokenDashboard] Using token address from service: ${tokenAddress}`
-        );
 
-        // Step 3: Get token details (name, symbol, balance)
-        let currentTokenInfo: TokenInfo = {
+        // Now read token details (symbol, name)
+        console.log("[useTokenDashboard] Reading token details for:", tokenAddress);
+        const tokenSymbol = (await publicClient.readContract({
           address: tokenAddress,
-          name: null,
-          symbol: null,
-          balance: null,
+          abi: ERC20Abi as Abi,
+          functionName: "symbol",
+        })) as string;
+        
+        const tokenName = (await publicClient.readContract({
+          address: tokenAddress,
+          abi: ERC20Abi as Abi,
+          functionName: "name",
+        })) as string;
+
+        // Get total supply of the token
+        const totalSupplyBigInt = (await publicClient.readContract({
+          address: tokenAddress,
+          abi: ERC20Abi as Abi,
+          functionName: "totalSupply",
+        })) as bigint;
+        
+        const totalSupply = formatEther(totalSupplyBigInt);
+        console.log("[useTokenDashboard] Token total supply:", totalSupply);
+
+        // Update token information state
+        const newTokenInfo = {
+          address: tokenAddress,
+          name: tokenName,
+          symbol: tokenSymbol,
+          balance: null, // Will be updated separately if wallet is connected
+          totalSupply: totalSupply, // Add total supply
         };
-
-        try {
-          console.log(
-            `[TokenDashboard] Fetching details for token: ${tokenAddress}`
-          );
-          const [tokenName, tokenSymbol] = await Promise.all([
-            publicClient.readContract({
-              address: tokenAddress,
-              abi: [
-                {
-                  name: "name",
-                  type: "function",
-                  stateMutability: "view",
-                  inputs: [],
-                  outputs: [{ type: "string", name: "" }],
-                },
-              ],
-              functionName: "name",
-            }) as Promise<string>,
-            publicClient.readContract({
-              address: tokenAddress,
-              abi: [
-                {
-                  name: "symbol",
-                  type: "function",
-                  stateMutability: "view",
-                  inputs: [],
-                  outputs: [{ type: "string", name: "" }],
-                },
-              ],
-              functionName: "symbol",
-            }) as Promise<string>,
-          ]);
-
-          currentTokenInfo.name = tokenName || null;
-          currentTokenInfo.symbol = tokenSymbol || null;
-          console.log(
-            `[TokenDashboard] Token details: Name=${tokenName}, Symbol=${tokenSymbol}`
-          );
-
-          if (walletAddress) {
-            console.log(
-              `[TokenDashboard] Fetching balance for wallet: ${walletAddress}`
-            );
-            const balanceBigInt = (await publicClient.readContract({
-              address: tokenAddress,
-              abi: [
-                {
-                  name: "balanceOf",
-                  type: "function",
-                  stateMutability: "view",
-                  inputs: [{ type: "address", name: "account" }],
-                  outputs: [{ type: "uint256", name: "" }],
-                },
-              ],
-              functionName: "balanceOf",
-              args: [walletAddress],
-            })) as bigint;
-            currentTokenInfo.balance = formatEther(balanceBigInt);
-            console.log(
-              `[TokenDashboard] Wallet balance: ${currentTokenInfo.balance}`
-            );
-          }
-        } catch (err) {
-          console.error("[TokenDashboard] Error fetching token details:", err);
-          // Keep token address, but mark other details as failed/null
-        }
-
-        setTokenInfo(currentTokenInfo);
+        setTokenInfo(newTokenInfo);
 
         // Step 4: Find the bonding curve using owner and token address
         console.log(
-          `[TokenDashboard] Finding bonding curve for owner ${fetchedOwnerAddress} and token ${tokenAddress}`
+          `[TokenDashboard] Finding bonding curve for owner ${provider} and token ${tokenAddress}`
         );
         const bondingCurve = await findBondingCurveForProviderToken(
           publicClient,
-          fetchedOwnerAddress,
+          provider as `0x${string}`,
           tokenAddress
         );
         setBondingCurveAddress(bondingCurve);

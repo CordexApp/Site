@@ -1,9 +1,9 @@
 "use client";
 
+import { CopyableHash } from "@/components/ui/CopyableHash";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 import { useTokenDashboard } from "@/hooks/useTokenDashboard";
 import PriceChart from "./PriceChart";
-import { LoadingDots } from "@/components/ui/LoadingDots";
-import { CopyableHash } from "@/components/ui/CopyableHash";
 import TokenTrading from "./TokenTrading";
 import { CommaFormatter } from "./ui/CommaFormatter";
 interface TokenDashboardProps {
@@ -84,13 +84,12 @@ export default function TokenDashboard({
             <h1 className="text-2xl font-bold text-white">
               {tokenInfo.name || "unknown"} ({tokenInfo.symbol || "?"})
             </h1>
-            {bondingCurveInfo && (
+            {tokenInfo.totalSupply && (
               <div className="text-cordex-green">
                 market cap:{" "}
                 <CommaFormatter
                   value={Number(
-                    Number(bondingCurveInfo.tokenSupply) *
-                      Number(bondingCurveInfo.currentPrice)
+                    parseFloat(tokenInfo.totalSupply) * 0.1 // 0.1 is the fixed initial price
                   ).toFixed(0)}
                 />{" "}
                 CRDX
