@@ -1,40 +1,39 @@
-import { useState, useEffect } from "react";
+import { ERC20Abi } from "@/abis/ERC20";
 import {
-  usePublicClient,
-  useAccount,
-  useWriteContract,
-  useWatchContractEvent,
-} from "wagmi";
-import {
-  findBondingCurveForProviderToken,
-  getCurrentPrice,
-  calculatePrice,
-  getTokenSupply,
-  getCordexTokenAddress,
-  buyTokens,
-  sellTokens,
-  approveTokens,
-  getTokenAllowance,
-  getSellPayoutEstimate,
+    approveTokens,
+    buyTokens,
+    calculatePrice,
+    findBondingCurveForProviderToken,
+    getCordexTokenAddress,
+    getCurrentPrice,
+    getSellPayoutEstimate,
+    getTokenAllowance,
+    getTokenSupply,
+    sellTokens,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import { getServiceByContractAddress } from "@/services/servicesService";
 import {
-  getOHLCVData,
-  getAvailableTimeframes,
-  OHLCVCandle,
+    getAvailableTimeframes,
+    getOHLCVData,
+    OHLCVCandle,
 } from "@/services/tradingDataService";
+import { useEffect, useState } from "react";
 import {
-  formatEther,
-  maxUint256,
-  Abi,
-  decodeEventLog,
-  parseAbiItem,
-  Log,
-  parseEther,
+    Abi,
+    decodeEventLog,
+    formatEther,
+    Log,
+    maxUint256,
+    parseAbiItem,
+    parseEther,
 } from "viem";
-import { ERC20Abi } from "@/abis/ERC20";
-import { BondingCurveAbi } from "@/abis/BondingCurveContract";
+import {
+    useAccount,
+    usePublicClient,
+    useWatchContractEvent,
+    useWriteContract,
+} from "wagmi";
 
 // Types (Ensure these are defined or imported correctly)
 export interface TokenInfo {

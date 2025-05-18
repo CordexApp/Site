@@ -1,18 +1,17 @@
-import { useState, useEffect } from "react";
 import {
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  usePublicClient,
-  useAccount,
-} from "wagmi";
-import { createService } from "@/services/servicesService";
-import {
-  contractConfig,
   deployProviderContract,
   extractContractAddressFromReceipt,
   getProviderContractAddress,
-  setContractActive,
+  setContractActive
 } from "@/services/contractServices";
+import { createService } from "@/services/servicesService";
+import { useEffect, useState } from "react";
+import {
+  useAccount,
+  usePublicClient,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
 
 export default function useServiceDeployment() {
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();

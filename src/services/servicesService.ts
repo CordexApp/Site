@@ -16,6 +16,7 @@ interface CreateServiceRequest {
   coin_contract_address?: string;
   bonding_curve_address?: string;
   owner_wallet_address?: string;
+  is_active?: boolean;
 }
 
 interface UpdateServiceRequest {

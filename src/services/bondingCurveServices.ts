@@ -1,17 +1,14 @@
 import {
-  parseEther,
-  maxUint256,
   formatEther,
-  TransactionReceipt,
   PublicClient,
-  Hash,
+  TransactionReceipt
 } from "viem";
-import { useWriteContract, usePublicClient } from "wagmi";
+import { usePublicClient, useWriteContract } from "wagmi";
 
 // Import ABIs
+import { BondingCurveAbi } from "@/abis/BondingCurveContract";
 import { ContractFactoryAbi } from "@/abis/ContractFactory";
 import { ERC20Abi } from "@/abis/ERC20";
-import { BondingCurveAbi } from "@/abis/BondingCurveContract";
 
 // Factory contract address
 const factoryAddressEnv = process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
@@ -201,37 +198,46 @@ export const findBondingCurveForProviderToken = async (
     console.log(
       `[BONDING CURVE LOOKUP] Looking for curve with token: ${providerTokenAddress}`
     );
-    for (const curveAddress of curves) {
-      try {
-        console.log(`[BONDING CURVE LOOKUP] Checking curve: ${curveAddress}`);
-        const tokenAddress = (await publicClient.readContract({
-          address: curveAddress,
-          abi: bondingCurveAbi,
-          functionName: "providerTokenAddress",
-        })) as `0x${string}`;
 
-        console.log(
-          `[BONDING CURVE LOOKUP] Curve ${curveAddress} has token: ${tokenAddress}`
-        );
-        console.log(
-          `[BONDING CURVE LOOKUP] Comparing with needed token: ${providerTokenAddress}`
-        );
+    // Prepare multicall requests
+    const multicallRequests = curves.map((curveAddress) => ({
+      address: curveAddress,
+      abi: bondingCurveAbi,
+      functionName: "providerTokenAddress",
+    })) as any[]; // Cast to any[] to satisfy multicall type, viem handles it.
 
-        // Compare addresses case-insensitively
-        if (tokenAddress.toLowerCase() === providerTokenAddress.toLowerCase()) {
+    const results = await publicClient.multicall({
+      contracts: multicallRequests,
+      allowFailure: true, // Allow individual calls to fail without failing the entire batch
+    });
+
+    // Find the matching curve from multicall results
+    for (let i = 0; i < curves.length; i++) {
+      const curveAddress = curves[i];
+      const result = results[i];
+
+      if (result.status === "success") {
+        const fetchedTokenAddress = result.result as `0x${string}`;
+        console.log(
+          `[BONDING CURVE LOOKUP] Curve ${curveAddress} has token: ${fetchedTokenAddress}`
+        );
+        if (
+          fetchedTokenAddress.toLowerCase() ===
+          providerTokenAddress.toLowerCase()
+        ) {
           console.log(
             `[BONDING CURVE LOOKUP] MATCH FOUND! Curve ${curveAddress} matches token ${providerTokenAddress}`
           );
           return curveAddress;
         } else {
           console.log(
-            `[BONDING CURVE LOOKUP] No match for this curve. ${tokenAddress.toLowerCase()} !== ${providerTokenAddress.toLowerCase()}`
+            `[BONDING CURVE LOOKUP] No match for this curve. ${fetchedTokenAddress.toLowerCase()} !== ${providerTokenAddress.toLowerCase()}`
           );
         }
-      } catch (err) {
+      } else {
         console.error(
-          `[BONDING CURVE LOOKUP] Error checking token for curve ${curveAddress}:`,
-          err
+          `[BONDING CURVE LOOKUP] Error fetching providerTokenAddress for curve ${curveAddress}:`,
+          result.error
         );
       }
     }

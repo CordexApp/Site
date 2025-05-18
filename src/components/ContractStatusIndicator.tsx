@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { usePublicClient } from "wagmi";
 import {
   checkContractActive,
   getContractProvider,
 } from "@/services/contractServices";
+import { useEffect, useState } from "react";
+import { usePublicClient } from "wagmi";
 
 interface ContractStatusIndicatorProps {
   contractAddress: string;

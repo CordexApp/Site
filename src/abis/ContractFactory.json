@@ -1,0 +1,91 @@
+[
+  {
+    "inputs": [
+      { "name": "apiEndpoint", "type": "string" },
+      { "name": "maxEscrow", "type": "uint256" },
+      { "name": "tokenName", "type": "string" },
+      { "name": "tokenSymbol", "type": "string" }
+    ],
+    "name": "deployProviderContract",
+    "outputs": [{ "name": "", "type": "address" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "name": "providerTokenAddress", "type": "address" },
+      { "name": "initialTokenAmount", "type": "uint256" },
+      { "name": "slope", "type": "uint256" },
+      { "name": "intercept", "type": "uint256" }
+    ],
+    "name": "deployBondingCurveContract",
+    "outputs": [{ "name": "", "type": "address" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "name": "provider", "type": "address" }],
+    "name": "getProviderContract",
+    "outputs": [{ "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "name": "provider", "type": "address" }],
+    "name": "getProviderToken",
+    "outputs": [{ "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "name": "provider", "type": "address" }],
+    "name": "getProviderContracts",
+    "outputs": [{ "name": "", "type": "address[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "name": "provider", "type": "address" }],
+    "name": "getProviderTokens",
+    "outputs": [{ "name": "", "type": "address[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "name": "provider", "type": "address" }],
+    "name": "getBondingCurveContract",
+    "outputs": [{ "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "name": "provider", "type": "address" }],
+    "name": "getBondingCurveContracts",
+    "outputs": [{ "name": "", "type": "address[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "type": "event",
+    "name": "ProviderContractDeployed",
+    "inputs": [
+      { "name": "provider", "type": "address", "indexed": true },
+      { "name": "contractAddress", "type": "address", "indexed": false },
+      { "name": "ownershipTokenAddress", "type": "address", "indexed": false },
+      { "name": "apiEndpoint", "type": "string", "indexed": false },
+      { "name": "maxEscrow", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BondingCurveDeployed",
+    "inputs": [
+      { "name": "provider", "type": "address", "indexed": true },
+      { "name": "bondingCurveAddress", "type": "address", "indexed": false },
+      { "name": "providerTokenAddress", "type": "address", "indexed": false },
+      { "name": "initialTokenAmount", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  }
+] 
