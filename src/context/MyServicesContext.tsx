@@ -1,14 +1,18 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { useAccount, usePublicClient } from "wagmi";
-import {
-  getProviderContractAddress,
-  checkContractActive,
-  getContractProvider,
-  getContractMaxEscrow,
-} from "@/services/contractServices";
-import { getBondingCurveContract } from "@/services/bondingCurveServices";
-import { contractConfig } from "@/services/contractServices";
+"use client";
+
 import { ProviderContractAbi } from "@/abis/ProviderContract";
+import {
+    getBondingCurveContract,
+} from "@/services/bondingCurveServices";
+import {
+    checkContractActive,
+    contractConfig,
+    getContractMaxEscrow,
+    getContractProvider
+} from "@/services/contractServices";
+import { fetchAndCalculateMarketCap, MarketCapDetails } from "@/utils/marketCapUtils";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { useAccount, usePublicClient } from "wagmi";
 
 // Define the shape of a service/contract
 export type ProviderServiceDetails = {
@@ -18,7 +22,7 @@ export type ProviderServiceDetails = {
   maxEscrow?: string;
   providerAddress?: `0x${string}` | null;
   bondingCurveAddress?: `0x${string}` | null;
-};
+} & Partial<MarketCapDetails>;
 
 // Define the context type
 type MyServicesContextType = {
@@ -65,7 +69,6 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoading(true);
       setError(null);
 
-      // Get all provider contracts for this wallet from the factory
       const providerContractsData = await publicClient.readContract({
         address: contractConfig.address,
         abi: contractConfig.abi,
@@ -74,84 +77,82 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
       });
 
       const contractAddresses = providerContractsData as `0x${string}`[];
-      console.log("Found provider contracts:", contractAddresses);
+      console.log("[MyServicesContext] Found provider contracts:", contractAddresses);
 
-      // Fetch details for each contract
-      const contractDetails = await Promise.all(
-        contractAddresses.map(async (contractAddress) => {
+      const contractDetailsPromises = contractAddresses.map(async (contractAddress) => {
+        let serviceDetail: Partial<ProviderServiceDetails> = {
+            providerContractAddress: contractAddress,
+            isActive: false,
+        };
+        try {
+          serviceDetail.isActive = await checkContractActive(
+            publicClient,
+            contractAddress
+          );
+          serviceDetail.providerAddress = await getContractProvider(
+            publicClient,
+            contractAddress
+          );
+          serviceDetail.maxEscrow = await getContractMaxEscrow(
+            publicClient,
+            contractAddress
+          );
+          serviceDetail.bondingCurveAddress = await getBondingCurveContract(
+            publicClient,
+            contractAddress
+          );
+
           try {
-            // Check if contract is active
-            const isActive = await checkContractActive(
-              publicClient,
-              contractAddress
-            );
-
-            // Get provider address
-            const providerAddress = await getContractProvider(
-              publicClient,
-              contractAddress
-            );
-
-            // Get max escrow
-            const maxEscrow = await getContractMaxEscrow(
-              publicClient,
-              contractAddress
-            );
-
-            // Get bonding curve address
-            const bondingCurveAddress = await getBondingCurveContract(
-              publicClient,
-              contractAddress
-            );
-
-            // Get API endpoint
-            let apiEndpoint = "";
-            try {
-              apiEndpoint = (await publicClient.readContract({
-                address: contractAddress,
-                abi: ProviderContractAbi,
-                functionName: "apiEndpoint",
-              })) as string;
-            } catch (endpointError) {
-              console.error("Error fetching API endpoint:", endpointError);
-            }
-
-            return {
-              providerContractAddress: contractAddress,
-              isActive,
-              apiEndpoint,
-              maxEscrow: maxEscrow || undefined,
-              providerAddress,
-              bondingCurveAddress,
-            };
-          } catch (error) {
-            console.error(
-              `Error fetching details for contract ${contractAddress}:`,
-              error
-            );
-            return {
-              providerContractAddress: contractAddress,
-              isActive: false,
-            };
+            serviceDetail.apiEndpoint = (await publicClient.readContract({
+              address: contractAddress,
+              abi: ProviderContractAbi,
+              functionName: "apiEndpoint",
+            })) as string;
+          } catch (endpointError) {
+            console.error(`[MyServicesContext] Error fetching API endpoint for ${contractAddress}:`, endpointError);
+            serviceDetail.apiEndpoint = "";
           }
-        })
-      );
 
-      setServices(contractDetails as ProviderServiceDetails[]);
+          if (serviceDetail.bondingCurveAddress) {
+            console.log("[MyServicesContext] Fetching market cap for BC:", serviceDetail.bondingCurveAddress);
+            const marketCapData = await fetchAndCalculateMarketCap(
+              publicClient,
+              serviceDetail.bondingCurveAddress
+            );
+            if (marketCapData) {
+              serviceDetail = { ...serviceDetail, ...marketCapData };
+            }
+          } else {
+            console.log("[MyServicesContext] No bonding curve address for contract:", contractAddress);
+          }
+          return serviceDetail as ProviderServiceDetails;
+        } catch (error) {
+          console.error(
+            `[MyServicesContext] Error fetching details for contract ${contractAddress}:`,
+            error
+          );
+          return {
+            providerContractAddress: contractAddress,
+            isActive: false,
+          } as ProviderServiceDetails;
+        }
+      });
+
+      const resolvedContractDetails = await Promise.all(contractDetailsPromises);
+      setServices(resolvedContractDetails.filter(details => details !== null) as ProviderServiceDetails[]);
+      console.log("[MyServicesContext] Processed services with market cap data:", services);
       setIsLoading(false);
     } catch (error) {
-      console.error("Error fetching provider contracts:", error);
+      console.error("[MyServicesContext] Error fetching provider contracts:", error);
       setError("Failed to load your services. Please try again later.");
       setIsLoading(false);
     }
   };
 
-  // Load contracts when the wallet address changes
   useEffect(() => {
     fetchProviderContracts();
   }, [address, publicClient]);
 
-  // Provide context value
   const value = {
     isLoading,
     error,

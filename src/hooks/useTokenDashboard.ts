@@ -1,38 +1,38 @@
 import { ERC20Abi } from "@/abis/ERC20";
 import {
-    approveTokens,
-    buyTokens,
-    calculatePrice,
-    findBondingCurveForProviderToken,
-    getCordexTokenAddress,
-    getCurrentPrice,
-    getSellPayoutEstimate,
-    getTokenAllowance,
-    getTokenSupply,
-    sellTokens,
+  approveTokens,
+  buyTokens,
+  calculatePrice,
+  findBondingCurveForProviderToken,
+  getCordexTokenAddress,
+  getCurrentPrice,
+  getSellPayoutEstimate,
+  getTokenAllowance,
+  getTokenSupply,
+  sellTokens,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import { getServiceByContractAddress } from "@/services/servicesService";
 import {
-    getAvailableTimeframes,
-    getOHLCVData,
-    OHLCVCandle,
+  getAvailableTimeframes,
+  getOHLCVData,
+  OHLCVCandle,
 } from "@/services/tradingDataService";
 import { useEffect, useState } from "react";
 import {
-    Abi,
-    decodeEventLog,
-    formatEther,
-    Log,
-    maxUint256,
-    parseAbiItem,
-    parseEther,
+  Abi,
+  decodeEventLog,
+  formatEther,
+  Log,
+  maxUint256,
+  parseAbiItem,
+  parseEther,
 } from "viem";
 import {
-    useAccount,
-    usePublicClient,
-    useWatchContractEvent,
-    useWriteContract,
+  useAccount,
+  usePublicClient,
+  useWatchContractEvent,
+  useWriteContract,
 } from "wagmi";
 
 // Types (Ensure these are defined or imported correctly)
@@ -63,7 +63,16 @@ interface SuccessInfo {
   txHash: `0x${string}`;
 }
 
-export function useTokenDashboard(providerContractAddress: `0x${string}`) {
+export function useTokenDashboard(
+  providerContractAddress: `0x${string}`,
+  options?: { 
+    fetchChartDataEnabled?: boolean;
+    initialCoinContractAddress?: `0x${string}` | null;
+  }
+) {
+  const fetchChartDataEnabled = options?.fetchChartDataEnabled !== false;
+  const initialCoinContractAddress = options?.initialCoinContractAddress;
+
   const [ownerAddress, setOwnerAddress] = useState<`0x${string}` | null>(null);
   const [bondingCurveAddress, setBondingCurveAddress] = useState<
     `0x${string}` | null
@@ -122,6 +131,69 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
 
   // Function to clear error message
   const clearErrorMessage = () => setError(null);
+
+  // Function to check and update token allowances
+  const checkAndUpdateAllowances = async () => {
+    if (!publicClient || !walletAddress || !bondingCurveAddress) {
+      return;
+    }
+    
+    // Check cordex token allowance
+    if (bondingCurveInfo.cordexTokenAddress) {
+      const cachedBuyAllowance = localStorage.getItem(
+        `buyAllowance-${bondingCurveInfo.cordexTokenAddress}-${walletAddress}-${bondingCurveAddress}`
+      );
+      
+      if (cachedBuyAllowance === 'true') {
+        setBuyState(prev => ({ ...prev, hasAllowance: true }));
+      } else {
+        const cordexAllowance = await getTokenAllowance(
+          publicClient,
+          bondingCurveInfo.cordexTokenAddress,
+          walletAddress,
+          bondingCurveAddress
+        );
+        
+        const hasBuyAllowance = cordexAllowance > BigInt(0);
+        setBuyState(prev => ({ ...prev, hasAllowance: hasBuyAllowance }));
+        
+        if (hasBuyAllowance) {
+          localStorage.setItem(
+            `buyAllowance-${bondingCurveInfo.cordexTokenAddress}-${walletAddress}-${bondingCurveAddress}`,
+            'true'
+          );
+        }
+      }
+    }
+    
+    // Check provider token allowance
+    if (tokenInfo.address) {
+      const cachedSellAllowance = localStorage.getItem(
+        `sellAllowance-${tokenInfo.address}-${walletAddress}-${bondingCurveAddress}`
+      );
+      
+      if (cachedSellAllowance === 'true') {
+        setSellState(prev => ({ ...prev, hasAllowance: true }));
+      } else {
+        const providerTokenAllowance = await getTokenAllowance(
+          publicClient,
+          tokenInfo.address,
+          walletAddress,
+          bondingCurveAddress
+        );
+        
+        const hasSellAllowance = providerTokenAllowance > BigInt(0);
+        setSellState(prev => ({ ...prev, hasAllowance: hasSellAllowance }));
+        
+        if (hasSellAllowance) {
+          localStorage.setItem(
+            `sellAllowance-${tokenInfo.address}-${walletAddress}-${bondingCurveAddress}`,
+            'true'
+          );
+        }
+      }
+    }
+  };
 
   // Base URL for block explorer (adjust based on actual network)
   const blockExplorerUrl = chain?.blockExplorers?.default.url;
@@ -230,29 +302,8 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
 
       // Check allowances if wallet is connected
       if (walletAddress && cordexAddress && tokenInfo.address) {
-        // Check Cordex token allowance for buying
-        const cordexAllowance = await getTokenAllowance(
-          publicClient,
-          cordexAddress,
-          walletAddress,
-          curveAddress
-        );
-        setBuyState((prev) => ({
-          ...prev,
-          hasAllowance: cordexAllowance > BigInt(0),
-        }));
-
-        // Check provider token allowance for selling
-        const providerTokenAllowance = await getTokenAllowance(
-          publicClient,
-          tokenInfo.address,
-          walletAddress,
-          curveAddress
-        );
-        setSellState((prev) => ({
-          ...prev,
-          hasAllowance: providerTokenAllowance > BigInt(0),
-        }));
+        // Use the helper function to check and update allowances
+        await checkAndUpdateAllowances();
       }
     } catch (err) {
       console.error(
@@ -340,15 +391,25 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
         
         setOwnerAddress(provider as `0x${string}`);
 
-        // Then, get the service record from the backend
-        const service = await getServiceByContractAddress(providerContractAddress);
-        console.log("[useTokenDashboard] Service from backend:", service);
+        let tokenAddress: `0x${string}` | null | undefined = initialCoinContractAddress;
 
-        if (!service || !service.coin_contract_address) {
-          throw new Error("Token information not available");
+        if (!tokenAddress) {
+          // Fallback to fetching if not provided
+          console.log("[useTokenDashboard] initialCoinContractAddress not provided, fetching service for it via providerContractAddress:", providerContractAddress);
+          const service = await getServiceByContractAddress(providerContractAddress);
+          console.log("[useTokenDashboard] Service from backend:", service);
+
+          if (!service || !service.coin_contract_address) {
+            throw new Error("Token information not available from fetched service");
+          }
+          tokenAddress = service.coin_contract_address as `0x${string}`;
+        } else {
+          console.log("[useTokenDashboard] Using provided initialCoinContractAddress:", tokenAddress);
         }
-
-        const tokenAddress = service.coin_contract_address as `0x${string}`;
+        
+        if (!tokenAddress) { // Final check if tokenAddress is still null/undefined
+             throw new Error("Coin contract address could not be determined.");
+        }
 
         // Now read token details (symbol, name)
         console.log("[useTokenDashboard] Reading token details for:", tokenAddress);
@@ -433,10 +494,24 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
 
   // Fetch chart data when bonding curve address or timeframe changes
   useEffect(() => {
-    if (bondingCurveAddress) {
+    if (bondingCurveAddress && fetchChartDataEnabled) {
       fetchChartData();
     }
-  }, [bondingCurveAddress, chartTimeframe]);
+  }, [bondingCurveAddress, chartTimeframe, fetchChartDataEnabled]);
+
+  // Check token allowances whenever relevant addresses change
+  useEffect(() => {
+    if (publicClient && walletAddress && bondingCurveAddress && 
+        (bondingCurveInfo.cordexTokenAddress || tokenInfo.address)) {
+      checkAndUpdateAllowances();
+    }
+  }, [
+    publicClient, 
+    walletAddress, 
+    bondingCurveAddress, 
+    bondingCurveInfo.cordexTokenAddress, 
+    tokenInfo.address
+  ]);
 
   // Add Contract Event Listener
   useWatchContractEvent({
@@ -608,6 +683,15 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
           receipt
         );
         setBuyState((prev) => ({ ...prev, hasAllowance: true }));
+        
+        // Store approval in localStorage to persist across sessions
+        if (bondingCurveInfo.cordexTokenAddress && bondingCurveAddress && walletAddress) {
+          localStorage.setItem(
+            `buyAllowance-${bondingCurveInfo.cordexTokenAddress}-${walletAddress}-${bondingCurveAddress}`,
+            'true'
+          );
+        }
+        
         setSuccessInfo({
           message: "cordex approved successfully!",
           txHash: receipt.transactionHash,
@@ -662,6 +746,15 @@ export function useTokenDashboard(providerContractAddress: `0x${string}`) {
           receipt
         );
         setSellState((prev) => ({ ...prev, hasAllowance: true }));
+        
+        // Store approval in localStorage to persist across sessions
+        if (tokenInfo.address && bondingCurveAddress && walletAddress) {
+          localStorage.setItem(
+            `sellAllowance-${tokenInfo.address}-${walletAddress}-${bondingCurveAddress}`,
+            'true'
+          );
+        }
+        
         setSuccessInfo({
           message: `${
             tokenInfo.symbol?.toLowerCase() || "tokens"

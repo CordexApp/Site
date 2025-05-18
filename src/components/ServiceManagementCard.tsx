@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { ProviderServiceDetails } from "@/context/MyServicesContext";
+import Link from "next/link";
 
 interface ServiceManagementCardProps {
   service: ProviderServiceDetails;
@@ -46,6 +46,12 @@ export function ServiceManagementCard({ service }: ServiceManagementCardProps) {
             <p>
               <span className="text-gray-400">Bonding Curve:</span>{" "}
               {service.bondingCurveAddress}
+            </p>
+          )}
+          {service.marketCap && service.marketCap !== "NaN" && (
+            <p>
+              <span className="text-gray-400">Market Cap:</span>{" "}
+              {service.marketCap} CRDX
             </p>
           )}
         </div>

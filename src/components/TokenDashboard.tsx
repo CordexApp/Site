@@ -6,12 +6,15 @@ import { useTokenDashboard } from "@/hooks/useTokenDashboard";
 import PriceChart from "./PriceChart";
 import TokenTrading from "./TokenTrading";
 import { CommaFormatter } from "./ui/CommaFormatter";
+
 interface TokenDashboardProps {
   providerContractAddress: `0x${string}`;
+  coinContractAddress?: `0x${string}` | null;
 }
 
 export default function TokenDashboard({
   providerContractAddress,
+  coinContractAddress,
 }: TokenDashboardProps) {
   const {
     ownerAddress,
@@ -42,7 +45,9 @@ export default function TokenDashboard({
     handleTimeframeChange,
     clearSuccessMessage,
     clearErrorMessage,
-  } = useTokenDashboard(providerContractAddress);
+  } = useTokenDashboard(providerContractAddress, {
+    initialCoinContractAddress: coinContractAddress,
+  });
 
   if (isLoading) {
     return (
@@ -89,7 +94,7 @@ export default function TokenDashboard({
                 market cap:{" "}
                 <CommaFormatter
                   value={Number(
-                    parseFloat(tokenInfo.totalSupply) * 0.1 // 0.1 is the fixed initial price
+                    parseFloat(tokenInfo.totalSupply) * parseFloat(bondingCurveInfo.currentPrice)
                   ).toFixed(0)}
                 />{" "}
                 CRDX

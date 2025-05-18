@@ -1,6 +1,5 @@
 "use client";
 
-import { useTokenDashboard } from "@/hooks/useTokenDashboard";
 import { Service } from "@/types/service";
 import Image from "next/image";
 import Link from "next/link";
@@ -9,72 +8,13 @@ interface ServiceCardProps {
   service: Service;
 }
 
-// Internal component to handle token data fetching and display
-interface TokenDisplayProps {
-  providerContractAddress: `0x${string}`;
-}
-
-function TokenDisplay({ providerContractAddress }: TokenDisplayProps) {
-  const {
-    tokenInfo,
-    bondingCurveInfo,
-    isLoading: isTokenDataLoading,
-    error: tokenDataError,
-  } = useTokenDashboard(providerContractAddress);
-
-  // Cast error type explicitly
-  const typedError = tokenDataError as Error | null;
-
-  // Fixed initial price of 0.1 CORDEX
-  const FIXED_INITIAL_PRICE = 0.1;
-
-  // Calculate market cap using total supply and fixed initial price
-  const marketCap = tokenInfo?.totalSupply
-    ? parseFloat(tokenInfo.totalSupply) * FIXED_INITIAL_PRICE
-    : null;
-
-  // Helper function to format market cap
-  const formatMarketCap = (cap: number | null) => {
-    if (cap === null || isNaN(cap)) return "N/A";
-    if (cap >= 1_000_000_000) return `${(cap / 1_000_000_000).toFixed(2)}B`;
-    if (cap >= 1_000_000) return `${(cap / 1_000_000).toFixed(2)}M`;
-    if (cap >= 1_000) return `${(cap / 1_000).toFixed(2)}K`;
-    return cap.toFixed(2);
-  };
-
-  if (isTokenDataLoading) {
-    return <p className="text-gray-500">Loading token data...</p>;
-  }
-
-  if (typedError) {
-    const errorMessage = typedError.message || String(typedError);
-    return (
-      <p className="text-cordex-red" title={errorMessage}>
-        Token Error
-      </p>
-    );
-  }
-
-  if (tokenInfo?.symbol) {
-    return (
-      <div className="flex justify-between items-center">
-        <span className="text-gray-400 font-medium">{tokenInfo.symbol}</span>
-        <span className="text-gray-300">
-          market cap: {formatMarketCap(marketCap)} CRDX
-        </span>
-      </div>
-    );
-  }
-
-  // Fallback if no symbol is found even after loading without error
-  return <p className="text-yellow-500">No token data</p>;
-}
+// Remove TokenDisplay and its props
+// interface TokenDisplayProps { ... }
+// function TokenDisplay({ ... }) { ... }
 
 export function ServiceCard({ service }: ServiceCardProps) {
-  const { provider_contract_address } = service;
-  // Check if address is valid before attempting to render TokenDisplay
-  const isValidAddress =
-    provider_contract_address && provider_contract_address.startsWith("0x");
+  // const { provider_contract_address, coin_contract_address } = service; // No longer needed here for TokenDisplay
+  // const isValidProviderAddress = ...; // No longer needed here for TokenDisplay
 
   return (
     <Link
@@ -104,16 +44,13 @@ export function ServiceCard({ service }: ServiceCardProps) {
         >
           {service.endpoint || "No endpoint"}
         </p>
-        {/* Token Info Section */}
+        {/* Token Info Section - Only Market Cap */}
         <div className="mt-auto pt-2 text-xs">
-          {isValidAddress ? (
-            <TokenDisplay
-              providerContractAddress={
-                provider_contract_address as `0x${string}`
-              }
-            />
-          ) : (
-            <p className="text-gray-600">No contract</p>
+          {/* Display Market Cap */}
+          {service.marketCap && service.marketCap !== "NaN" && (
+            <p className="text-gray-300 font-medium">
+              Market Cap: {service.marketCap} CRDX
+            </p>
           )}
         </div>
       </div>

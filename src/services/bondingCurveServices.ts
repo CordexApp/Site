@@ -332,6 +332,33 @@ export const getCordexTokenAddress = async (
   }
 };
 
+export const getProviderTokenAddressFromBondingCurve = async (
+  publicClient: ReturnType<typeof usePublicClient> | undefined,
+  bondingCurveAddress: `0x${string}`
+): Promise<`0x${string}` | null> => {
+  try {
+    if (!publicClient) {
+      console.warn("[bondingCurveServices] Public client not available for getProviderTokenAddressFromBondingCurve.");
+      return null;
+    }
+    const tokenAddress = await publicClient.readContract({
+      address: bondingCurveAddress,
+      abi: bondingCurveAbi,
+      functionName: "providerTokenAddress", // Ensure this function exists in BondingCurveAbi
+    });
+    if (tokenAddress === "0x0000000000000000000000000000000000000000") {
+      return null;
+    }
+    return tokenAddress as `0x${string}`;
+  } catch (err) {
+    console.error(
+      `[bondingCurveServices] getProviderTokenAddressFromBondingCurve error for bonding curve ${bondingCurveAddress}:`,
+      err
+    );
+    return null;
+  }
+};
+
 export const buyTokens = async (
   publicClient: PublicClient | undefined,
   writeContractAsync: ReturnType<typeof useWriteContract>["writeContractAsync"],

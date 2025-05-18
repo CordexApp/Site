@@ -45,6 +45,8 @@ export function LaunchServiceFlow() {
   const [maxEscrow, setMaxEscrow] = useState('1');
   const [tokenPercentage, setTokenPercentage] = useState(20); // Default 20% of tokens to bonding curve
   const [deployBondingCurve, setDeployBondingCurve] = useState(true); // New state for bonding curve toggle
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   // Deployment state
   const [currentStep, setCurrentStep] = useState<DeploymentStep>('input');
@@ -158,15 +160,61 @@ export function LaunchServiceFlow() {
         throw new Error('Contract addresses are missing for backend registration.');
       }
       
-      // Create service with or without bonding curve
+      // Upload image if selected
+      let imageUrl = undefined;
+      if (imageFile) {
+        try {
+          // Get pre-signed URL for upload
+          const uploadUrlResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/upload/presigned-url`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              file_name: imageFile.name,
+              content_type: imageFile.type
+            }),
+          });
+          
+          if (!uploadUrlResponse.ok) {
+            console.error('Failed to get upload URL:', await uploadUrlResponse.text());
+          } else {
+            const { presigned_url, object_key } = await uploadUrlResponse.json();
+            
+            // Upload the file to S3
+            const uploadResponse = await fetch(presigned_url, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': imageFile.type
+              },
+              body: imageFile
+            });
+            
+            if (uploadResponse.ok) {
+              // Construct the public URL (adjust based on your S3 configuration)
+              imageUrl = `${process.env.NEXT_PUBLIC_S3_PUBLIC_URL || 'https://cordex-service-images.s3.amazonaws.com'}/${object_key}`;
+              console.log('Image uploaded successfully:', imageUrl);
+            } else {
+              console.error('Failed to upload image:', await uploadResponse.text());
+            }
+          }
+        } catch (err) {
+          console.error('Error uploading image:', err);
+          // Continue with service creation even if image upload fails
+        }
+      }
+      
+      // Create service with all available data
       const serviceToCreate = {
         name: serviceName,
+        description: serviceDescription, // Include description field
         endpoint: apiEndpoint,
         provider_contract_address: deployedProviderContractAddress,
         coin_contract_address: deployedTokenAddress,
-        bonding_curve_address: deployedBondingCurveAddress || undefined,  // Use undefined instead of null
+        bonding_curve_address: deployedBondingCurveAddress || undefined,
         owner_wallet_address: address,
         is_active: true,
+        image: imageUrl
       };
 
       const createdService = await createService(serviceToCreate);
@@ -198,6 +246,19 @@ export function LaunchServiceFlow() {
   const handleRedirectToManage = () => {
     if (providerContractAddress) {
       router.push(`/service/${providerContractAddress}`);
+    }
+  };
+
+  // Function to handle image selection
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -238,6 +299,36 @@ export function LaunchServiceFlow() {
                     rows={3}
                     className="bg-black/50 border-gray-600"
                   />
+                </div>
+                
+                <div>
+                  <label className="block text-gray-300 mb-1">Service Image (Optional)</label>
+                  <div className="flex flex-col space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-black/50 file:text-white hover:file:bg-black/30"
+                    />
+                    {imagePreview && (
+                      <div className="relative w-32 h-32 mt-2 border border-gray-600 rounded overflow-hidden">
+                        <img 
+                          src={imagePreview} 
+                          alt="Preview" 
+                          className="object-cover w-full h-full"
+                        />
+                        <button 
+                          onClick={() => {
+                            setImageFile(null);
+                            setImagePreview(null);
+                          }}
+                          className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 <div>
@@ -333,14 +424,24 @@ export function LaunchServiceFlow() {
         )}
         
         {currentStep !== 'input' && currentStep !== 'complete' && (
-          <div className="text-center py-10">
+          <div className="text-center py-10 border border-gray-700 rounded-lg bg-black/30 p-6">
+            <TypedText
+              text={
+                currentStep === 'confirming' ? 'waiting for confirmation' :
+                currentStep === 'deploying-service' ? 'deploying your service' :
+                currentStep === 'approving-tokens' ? 'approving tokens' :
+                currentStep === 'deploying-curve' ? 'deploying bonding curve' :
+                'registering service with backend'
+              }
+              className="text-xl mb-6"
+            />
             <div className="flex justify-center items-center mb-4">
               <LoadingDots text={
-                currentStep === 'confirming' ? 'Waiting for confirmation' :
-                currentStep === 'deploying-service' ? 'Deploying your service' :
-                currentStep === 'approving-tokens' ? 'Approving tokens' :
-                currentStep === 'deploying-curve' ? 'Deploying bonding curve' :
-                'Registering service with backend'
+                currentStep === 'confirming' ? 'confirm in wallet' :
+                currentStep === 'deploying-service' ? 'deploying' :
+                currentStep === 'approving-tokens' ? 'approving' :
+                currentStep === 'deploying-curve' ? 'deploying' :
+                'registering'
               } />
             </div>
             <p className="text-gray-400 mt-4">

@@ -11,6 +11,7 @@ interface ServicesResponse {
 interface CreateServiceRequest {
   name: string;
   endpoint: string;
+  description?: string;
   image?: string;
   provider_contract_address?: string;
   coin_contract_address?: string;
@@ -22,6 +23,7 @@ interface CreateServiceRequest {
 interface UpdateServiceRequest {
   name?: string;
   endpoint?: string;
+  description?: string;
   image?: string;
   provider_contract_address?: string;
   coin_contract_address?: string;
