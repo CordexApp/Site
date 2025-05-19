@@ -52,11 +52,11 @@ function MyServicesContent() {
       </div>
       
       {/* Services list */}
-      <div className="flex flex-col border border-gray-800">
-        {services.map((service, index) => (
+      <div className="grid grid-cols-1 gap-4">
+        {services.map((service) => (
           <div 
             key={service.providerContractAddress}
-            className={index !== services.length - 1 ? "border-b border-gray-800" : ""}
+            className="border border-gray-800 rounded-md bg-black/30 hover:bg-black/40 transition-colors duration-200"
           >
             <ServiceManagementCard service={service} />
           </div>
