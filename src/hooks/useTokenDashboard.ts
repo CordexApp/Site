@@ -1,38 +1,38 @@
 import { ERC20Abi } from "@/abis/ERC20";
 import {
-  approveTokens,
-  buyTokens,
-  calculatePrice,
-  findBondingCurveForProviderToken,
-  getCordexTokenAddress,
-  getCurrentPrice,
-  getSellPayoutEstimate,
-  getTokenAllowance,
-  getTokenSupply,
-  sellTokens,
+    approveTokens,
+    buyTokens,
+    calculatePrice,
+    findBondingCurveForProviderToken,
+    getCordexTokenAddress,
+    getCurrentPrice,
+    getSellPayoutEstimate,
+    getTokenAllowance,
+    getTokenSupply,
+    sellTokens,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import { getServiceByContractAddress } from "@/services/servicesService";
 import {
-  getAvailableTimeframes,
-  getOHLCVData,
-  OHLCVCandle,
+    getAvailableTimeframes,
+    getOHLCVData,
+    OHLCVCandle,
 } from "@/services/tradingDataService";
 import { useEffect, useState } from "react";
 import {
-  Abi,
-  decodeEventLog,
-  formatEther,
-  Log,
-  maxUint256,
-  parseAbiItem,
-  parseEther,
+    Abi,
+    decodeEventLog,
+    formatEther,
+    Log,
+    maxUint256,
+    parseAbiItem,
+    parseEther,
 } from "viem";
 import {
-  useAccount,
-  usePublicClient,
-  useWatchContractEvent,
-  useWriteContract,
+    useAccount,
+    usePublicClient,
+    useWatchContractEvent,
+    useWriteContract,
 } from "wagmi";
 
 // Types (Ensure these are defined or imported correctly)
@@ -494,10 +494,12 @@ export function useTokenDashboard(
 
   // Fetch chart data when bonding curve address or timeframe changes
   useEffect(() => {
-    if (bondingCurveAddress && fetchChartDataEnabled) {
-      fetchChartData();
+    if (fetchChartDataEnabled && bondingCurveAddress) {
+      fetchChartData(); // Initial fetch
+      const intervalId = setInterval(fetchChartData, 60000); // Refresh every 60 seconds
+      return () => clearInterval(intervalId);
     }
-  }, [bondingCurveAddress, chartTimeframe, fetchChartDataEnabled]);
+  }, [fetchChartDataEnabled, bondingCurveAddress, chartTimeframe]);
 
   // Check token allowances whenever relevant addresses change
   useEffect(() => {

@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  checkContractActive,
-  getContractProvider,
+    checkContractActive,
+    getContractProvider,
 } from "@/services/contractServices";
 import { useEffect, useState } from "react";
 import { usePublicClient } from "wagmi";
@@ -79,7 +79,7 @@ export default function ContractStatusIndicator({
     }
 
     // Check contract status every 60 seconds
-    const intervalId = setInterval(checkStatus, 60000);
+    const intervalId = setInterval(checkStatus, 120000);
 
     return () => {
       clearInterval(intervalId);

@@ -83,22 +83,26 @@ export default function TokenDashboard({
       )}
 
       {/* Token Header Info */}
-      {tokenInfo.address && (
+      {tokenInfo.address && bondingCurveAddress && (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-x-4">
             <h1 className="text-2xl font-bold text-white">
               {tokenInfo.name || "unknown"} ({tokenInfo.symbol || "?"})
             </h1>
-            {tokenInfo.totalSupply && (
-              <div className="text-cordex-green">
-                market cap:{" "}
-                <CommaFormatter
-                  value={Number(
-                    parseFloat(tokenInfo.totalSupply) * parseFloat(bondingCurveInfo.currentPrice)
-                  ).toFixed(0)}
-                />{" "}
-                CRDX
-              </div>
+            {tokenInfo.totalSupply && bondingCurveInfo?.currentPrice && (
+              <>
+                {parseFloat(tokenInfo.totalSupply) > 0 && parseFloat(bondingCurveInfo.currentPrice) > 0 && (
+                  <div className="text-cordex-green">
+                    market cap:{" "}
+                    <CommaFormatter
+                      value={Number(
+                        parseFloat(tokenInfo.totalSupply) * parseFloat(bondingCurveInfo.currentPrice)
+                      ).toFixed(0)}
+                    />{" "}
+                    CRDX
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

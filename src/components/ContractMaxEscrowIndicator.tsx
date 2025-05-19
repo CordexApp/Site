@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { usePublicClient } from "wagmi";
 import { getContractMaxEscrow } from "@/services/contractServices";
+import { useEffect, useState } from "react";
+import { usePublicClient } from "wagmi";
 
 interface ContractMaxEscrowIndicatorProps {
   contractAddress: string;
@@ -67,7 +67,7 @@ export default function ContractMaxEscrowIndicator({
     }
 
     // Check maxEscrow every 60 seconds
-    const intervalId = setInterval(checkMaxEscrow, 60000);
+    const intervalId = setInterval(checkMaxEscrow, 120000);
 
     return () => {
       clearInterval(intervalId);
