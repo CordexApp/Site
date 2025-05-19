@@ -1,16 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
-import {
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  useAccount,
-  useReadContract,
-  useBalance,
-} from "wagmi";
-import { parseEther, formatEther } from "viem";
-import { generateApiToken } from "@/services/contractServices";
 import { useService } from "@/context/ServiceContext";
-import { providerContractAbi } from "@/services/contractServices";
-import { erc20Abi } from "viem";
+import { generateApiToken } from "@/services/contractServices";
+import { useCallback, useEffect, useState } from "react";
+import { erc20Abi, parseEther } from "viem";
+import {
+    useAccount,
+    useWaitForTransactionReceipt,
+    useWriteContract
+} from "wagmi";
 
 // Define the CRDX token address
 const CRDX_TOKEN_ADDRESS =
@@ -400,7 +396,18 @@ export default function useApiTokenGeneration() {
   }, [resetApproveWrite, resetGenerateTokenWrite]);
 
   return {
-    ...tokenState,
+    tokenHash: tokenState.tokenHash,
+    isCheckingAllowance: tokenState.isCheckingAllowance,
+    isApproving: tokenState.isApproving,
+    needsApproval: tokenState.needsApproval,
+    isGenerating: tokenState.isGenerating,
+    isPending: tokenState.isPending,
+    isConfirming: tokenState.isConfirming,
+    isSuccess: tokenState.isSuccess,
+    isApproveSuccess,
+    error: tokenState.error,
+    approvalTransactionHash: tokenState.approvalTransactionHash,
+    generateTransactionHash: tokenState.generateTransactionHash,
     generateToken,
     approveSpending,
     resetToken,
