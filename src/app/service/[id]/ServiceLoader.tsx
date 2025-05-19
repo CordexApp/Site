@@ -162,6 +162,16 @@ export default function ServiceLoader({ id }: ServiceLoaderProps) {
   const contractAddress = service?.provider_contract_address || "";
   const coinAddress = service?.coin_contract_address || null;
 
+  console.log("[ServiceLoader] About to render. States:", {
+    id,
+    loading,
+    error,
+    serviceExists: !!service,
+    endpoint,
+    contractAddress,
+    fetchedServiceContent: service
+  });
+
   return (
     <ServiceProvider initialService={service}>
       <div className="flex gap-4 mb-8">

@@ -1,6 +1,7 @@
 "use client";
 
 import { Service } from "@/types/service";
+import { formatCompactNumber } from "@/utils/marketCapUtils";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -49,7 +50,7 @@ export function ServiceCard({ service }: ServiceCardProps) {
           {/* Display Market Cap */}
           {service.marketCap && service.marketCap !== "NaN" && (
             <p className="text-gray-300 font-medium">
-              Market Cap: {service.marketCap} CRDX
+              Market Cap: {formatCompactNumber(service.marketCap)} CRDX
             </p>
           )}
         </div>

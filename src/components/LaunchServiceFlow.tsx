@@ -431,7 +431,7 @@ export function LaunchServiceFlow() {
                 currentStep === 'deploying-service' ? 'deploying your service' :
                 currentStep === 'approving-tokens' ? 'approving tokens' :
                 currentStep === 'deploying-curve' ? 'deploying bonding curve' :
-                'registering service with backend'
+                'registering service on cordex'
               }
               className="text-xl mb-6"
             />

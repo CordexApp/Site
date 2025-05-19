@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useState } from "react";
 import { Service } from "@/types/service";
+import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 
 interface ServiceContextType {
   service: Service | null;
@@ -27,6 +27,11 @@ export function ServiceProvider({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [maxEscrow, setMaxEscrow] = useState<string | null>(null);
+
+  useEffect(() => {
+    console.log("[ServiceContext] initialService prop changed or component mounted:", initialService);
+    setService(initialService);
+  }, [initialService]);
 
   const value = {
     service,

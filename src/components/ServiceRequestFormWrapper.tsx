@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
 import { useService } from "@/context/ServiceContext";
-import ServiceRequestForm from "./ServiceRequestForm";
-import { usePublicClient } from "wagmi";
 import { getContractMaxEscrow } from "@/services/contractServices";
+import { useEffect } from "react";
+import { usePublicClient } from "wagmi";
+import ServiceRequestForm from "./ServiceRequestForm";
 
 export default function ServiceRequestFormWrapper() {
   const { service, maxEscrow, setMaxEscrow } = useService();
@@ -51,8 +51,9 @@ export default function ServiceRequestFormWrapper() {
       serviceName,
       endpoint,
       providerContractAddress,
+      rawServiceFromContext: service
     });
-  }, [serviceName, endpoint, providerContractAddress]);
+  }, [serviceName, endpoint, providerContractAddress, service]);
 
   if (!service || !service.endpoint || !service.provider_contract_address) {
     return (

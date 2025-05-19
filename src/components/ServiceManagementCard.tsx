@@ -1,4 +1,5 @@
 import { ProviderServiceDetails } from "@/context/MyServicesContext";
+import { formatCompactNumber } from "@/utils/marketCapUtils";
 import Link from "next/link";
 
 interface ServiceManagementCardProps {
@@ -51,7 +52,7 @@ export function ServiceManagementCard({ service }: ServiceManagementCardProps) {
           {service.marketCap && service.marketCap !== "NaN" && (
             <p>
               <span className="text-gray-400">Market Cap:</span>{" "}
-              {service.marketCap} CRDX
+              {formatCompactNumber(service.marketCap)} CRDX
             </p>
           )}
         </div>
