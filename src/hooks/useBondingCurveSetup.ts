@@ -1,22 +1,22 @@
-import { useState, useEffect } from "react";
-import {
-  useAccount,
-  useWriteContract,
-  usePublicClient,
-  useWaitForTransactionReceipt,
-} from "wagmi";
 import { useManageService } from "@/context/ManageServiceContext";
 import {
-  getTokenAllowance,
-  approveTokens,
-  deployBondingCurveContract,
-  FACTORY_ADDRESS,
+    approveTokens,
+    deployBondingCurveContract,
+    FACTORY_ADDRESS,
+    getTokenAllowance,
 } from "@/services/bondingCurveServices";
+import {
+    getServiceByContractAddress,
+    updateService,
+} from "@/services/servicesService";
+import { useEffect, useState } from "react";
 import { formatEther, maxUint256 } from "viem";
 import {
-  getServiceByContractAddress,
-  updateService,
-} from "@/services/servicesService";
+    useAccount,
+    usePublicClient,
+    useWaitForTransactionReceipt,
+    useWriteContract,
+} from "wagmi";
 
 // Simple helper to shorten addresses
 export const shorten = (addr: string) =>
@@ -67,6 +67,9 @@ export function useBondingCurveSetup() {
     isLoading: contextLoading,
   } = useManageService();
 
+  // Debug log
+  console.log("[useBondingCurveSetup] bondingCurveAddress from context:", bondingCurveAddress);
+
   // State
   const [percentage, setPercentage] = useState("50");
   const [tokenBalance, setTokenBalance] = useState<bigint>(BigInt(0));
@@ -74,9 +77,6 @@ export function useBondingCurveSetup() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingDb, setIsUpdatingDb] = useState(false);
-
-  // Check if the current user is the owner
-  const isOwner = ownerAddress === walletAddress;
 
   // Calculate values based on percentage
   const initialTokenAmount =
@@ -279,43 +279,25 @@ export function useBondingCurveSetup() {
   }, [approveError, isApproveError, deployError, isDeployError]);
 
   return {
-    // States
+    error,
+    contextLoading,
+    bondingCurveAddress,
+    providerTokenAddress,
     percentage,
     setPercentage,
     tokenBalance,
-    allowance,
-    isLoading,
-    error,
-    contextLoading,
-    isOwner,
-    bondingCurveAddress,
-    providerTokenAddress,
-    isUpdatingDb,
-
-    // Computed values
-    initialTokenAmount,
-    allowanceEnough,
     formattedBalance,
+    initialTokenAmount,
     formattedInitialAmount,
-    fixedSlope,
-    fixedIntercept,
-
-    // Transaction states
-    isApproving,
-    isDeploying,
-    isProcessing,
+    allowanceEnough,
+    isLoading,
+    isApprovePending,
     isApproveTxConfirming,
     isApproveTxConfirmed,
+    isDeployPending,
     isDeployTxConfirming,
     isDeployTxConfirmed,
-    isDeployPending,
-    isApprovePending,
-
-    // Handlers
     handleApprove,
     handleDeploy,
-
-    // Utilities
-    shorten,
   };
 }

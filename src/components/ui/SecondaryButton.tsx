@@ -1,5 +1,5 @@
-import React from "react";
 import Link from "next/link";
+import React from "react";
 
 interface ButtonProps {
   children: React.ReactNode;
@@ -7,6 +7,7 @@ interface ButtonProps {
   href?: string;
   className?: string;
   type?: "button" | "submit" | "reset";
+  disabled?: boolean;
 }
 
 export function SecondaryButton({
@@ -15,9 +16,11 @@ export function SecondaryButton({
   href,
   className = "",
   type = "button",
+  disabled = false,
 }: ButtonProps) {
   const baseClasses = "relative text-white font-medium group";
-  const classes = `${baseClasses} ${className}`;
+  const disabledClasses = disabled ? "opacity-50 cursor-not-allowed" : "";
+  const classes = `${baseClasses} ${disabledClasses} ${className}`;
 
   const content = (
     <>
@@ -26,7 +29,7 @@ export function SecondaryButton({
     </>
   );
 
-  if (href) {
+  if (href && !disabled) {
     return (
       <Link href={href} className={classes}>
         {content}
@@ -34,8 +37,17 @@ export function SecondaryButton({
     );
   }
 
+  if (href && disabled) {
+    // Return a button that looks like a link but is disabled
+    return (
+      <button disabled className={classes}>
+        {content}
+      </button>
+    );
+  }
+
   return (
-    <button type={type} onClick={onClick} className={classes}>
+    <button type={type} onClick={onClick} disabled={disabled} className={classes}>
       {content}
     </button>
   );

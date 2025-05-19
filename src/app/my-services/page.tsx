@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { MyServicesProvider, useMyServices } from "@/context/MyServicesContext";
 import { ServiceManagementCard } from "@/components/ServiceManagementCard";
 import { LoadingDots } from "@/components/ui";
+import { SecondaryButton } from "@/components/ui/SecondaryButton";
+import { TypedText } from "@/components/ui/TypedText";
+import { MyServicesProvider, useMyServices } from "@/context/MyServicesContext";
 
 // Inner component that uses the context
 function MyServicesContent() {
@@ -28,26 +28,38 @@ function MyServicesContent() {
 
   if (services.length === 0) {
     return (
-      <div className="my-8">
-        <p>You don't have any active services yet.</p>
-        <Link
-          href="/launch-service"
-          className="text-blue-400 hover:underline mt-4 inline-block"
-        >
+      <div className="my-8 p-8 border border-gray-800 text-center">
+        <p className="mb-4">You don't have any active services yet.</p>
+        <SecondaryButton href="/launch">
           Launch a new service
-        </Link>
+        </SecondaryButton>
       </div>
     );
   }
 
   return (
     <div className="my-8">
-      <div className="grid gap-6">
-        {services.map((service) => (
-          <ServiceManagementCard
+      {/* Stats summary */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="p-4 border border-gray-800 bg-black/20">
+          <p className="text-gray-400 text-xs mb-1">Total Services</p>
+          <p className="text-xl font-mono">{services.length}</p>
+        </div>
+        <div className="p-4 border border-gray-800 bg-black/20">
+          <p className="text-gray-400 text-xs mb-1">Active</p>
+          <p className="text-xl font-mono">{services.filter(s => s.isActive).length}</p>
+        </div>
+      </div>
+      
+      {/* Services list */}
+      <div className="flex flex-col border border-gray-800">
+        {services.map((service, index) => (
+          <div 
             key={service.providerContractAddress}
-            service={service}
-          />
+            className={index !== services.length - 1 ? "border-b border-gray-800" : ""}
+          >
+            <ServiceManagementCard service={service} />
+          </div>
         ))}
       </div>
     </div>
@@ -57,9 +69,12 @@ function MyServicesContent() {
 export default function MyServicesPage() {
   return (
     <MyServicesProvider>
-      <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] py-12 font-mono bg-black text-white">
-        <h1 className="text-3xl font-bold mb-8">my services</h1>
-        <div className="w-full max-w-3xl">
+      <div className="flex flex-col items-start justify-start min-h-[calc(100vh-80px)] py-12 px-6 font-mono bg-black text-white max-w-5xl mx-auto">
+        <h1 className="text-2xl font-bold mb-4">
+          <TypedText text="my services" />
+        </h1>
+        <p className="text-gray-400 mb-8">Manage your deployed services and bonding curves</p>
+        <div className="w-full">
           <MyServicesContent />
         </div>
       </div>

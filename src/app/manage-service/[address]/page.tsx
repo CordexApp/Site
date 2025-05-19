@@ -1,17 +1,18 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import {
-  ManageServiceProvider,
-  useManageService,
-} from "@/context/ManageServiceContext";
-import ContractActivation from "@/components/ContractActivation";
 import BondingCurveSetup from "@/components/BondingCurveSetup";
+import ContractActivation from "@/components/ContractActivation";
+import ContractStatusIndicator from "@/components/ContractStatusIndicator";
+import ServiceHealthIndicator from "@/components/ServiceHealthIndicator";
+import { CopyableHash } from "@/components/ui/CopyableHash";
 import { LoadingDots } from "@/components/ui/LoadingDots";
 import { TypedText } from "@/components/ui/TypedText";
-import { CopyableHash } from "@/components/ui/CopyableHash";
-import ServiceHealthIndicator from "@/components/ServiceHealthIndicator";
-import ContractStatusIndicator from "@/components/ContractStatusIndicator";
+import {
+    ManageServiceProvider,
+    useManageService,
+} from "@/context/ManageServiceContext";
+import { useParams } from "next/navigation";
+import { useAccount } from "wagmi";
 
 // Inner component that uses the context
 function ManageServiceContent() {
@@ -24,7 +25,19 @@ function ManageServiceContent() {
     providerTokenAddress,
     providerTokenInfo,
     bondingCurveAddress,
+    service,
   } = useManageService();
+
+  const { address: walletAddress } = useAccount();
+
+  // Check if the current user is the owner
+  const isOwner = ownerAddress === walletAddress;
+  
+  // Debugging logs
+  console.log("[ManageServiceContent] Bonding curve address:", bondingCurveAddress);
+  console.log("[ManageServiceContent] Is owner:", isOwner);
+  console.log("[ManageServiceContent] Provider token address:", providerTokenAddress);
+  console.log("[ManageServiceContent] Should show bonding curve setup:", !bondingCurveAddress && isOwner && providerTokenAddress);
 
   // Format maxEscrow from bigint to a readable string
   const escrowAmount = providerContractDetails?.maxEscrow
@@ -47,8 +60,21 @@ function ManageServiceContent() {
     );
   }
 
+  // Get a display name for the service 
+  const serviceName = service?.name || providerTokenInfo?.name || `Service ${providerContractAddress?.substring(0, 6)}...`;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Service title and info */}
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-white mb-2">{serviceName}</h2>
+        {isOwner ? (
+          <p className="text-green-400 text-sm">You are the owner of this service</p>
+        ) : (
+          <p className="text-yellow-400 text-sm">You are viewing this service as a non-owner</p>
+        )}
+      </div>
+    
       <StatusIndicators />
       <p>
         <span className="text-gray-400">provider contract:</span>{" "}
@@ -68,10 +94,17 @@ function ManageServiceContent() {
       )}
 
       {bondingCurveAddress && (
-        <p>
-          <span className="text-gray-400">bonding curve:</span>{" "}
-          <CopyableHash hash={bondingCurveAddress} />
-        </p>
+        <div>
+          <p>
+            <span className="text-gray-400">bonding curve:</span>{" "}
+            <CopyableHash hash={bondingCurveAddress} />
+          </p>
+          <div className="mt-2 px-4 py-2 bg-green-900/20 border border-green-800/30 rounded-md">
+            <p className="text-sm text-green-400">
+              Your service has a bonding curve deployed. Users can now buy and sell your service tokens.
+            </p>
+          </div>
+        </div>
       )}
 
       {providerTokenInfo && (
@@ -96,9 +129,22 @@ function ManageServiceContent() {
           {escrowAmount ? `${escrowAmount} CRDX` : "Not available"}
         </span>
       </p>
-      {/* Only show these components when service data is loaded */}
-      <ContractActivation />
-      <BondingCurveSetup />
+      
+      {/* Service Management Components */}
+      <div className="mt-4">
+        <h3 className="text-xl font-semibold mb-4">Service Management</h3>
+        
+        {/* Contract Activation - always show */}
+        <ContractActivation />
+        
+        {/* Bonding Curve Setup - only show if no bonding curve exists and user is owner */}
+        {/* This is a strict check: only render if there is explicitly no bonding curve */}
+        {bondingCurveAddress === null && isOwner && providerTokenAddress && (
+          <div className="mt-4">
+            <BondingCurveSetup />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -133,7 +179,7 @@ export default function ManageServicePage() {
   return (
     <ManageServiceProvider serviceAddress={formattedAddress}>
       <div className="">
-        <h1 className="">
+        <h1 className="text-2xl font-bold mb-6">
           <TypedText text="manage your service" />
         </h1>
         <div className="w-full max-w-4xl">

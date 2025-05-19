@@ -2,16 +2,18 @@
 
 import { ProviderContractAbi } from "@/abis/ProviderContract";
 import {
-  getBondingCurveContract,
+    getBondingCurveContract,
 } from "@/services/bondingCurveServices";
 import {
-  checkContractActive,
-  contractConfig,
-  getContractMaxEscrow,
-  getContractProvider
+    checkContractActive,
+    contractConfig,
+    getContractMaxEscrow,
+    getContractProvider
 } from "@/services/contractServices";
+import { getServicesByOwnerOrAll } from "@/services/servicesService";
 import { fetchAndCalculateMarketCap, MarketCapDetails } from "@/utils/marketCapUtils";
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { erc20Abi } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 
 // Define the shape of a service/contract
@@ -22,6 +24,9 @@ export type ProviderServiceDetails = {
   maxEscrow?: string;
   providerAddress?: `0x${string}` | null;
   bondingCurveAddress?: `0x${string}` | null;
+  serviceName?: string;
+  userTokenBalance?: string; // Formatted balance for display
+  userTokenBalanceRaw?: bigint; // Raw balance for calculations
 } & Partial<MarketCapDetails>;
 
 // Define the context type
@@ -73,6 +78,22 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoading(true);
       setError(null);
 
+      // First, fetch services for the connected user from the database
+      console.log(`[MyServicesContext] Fetching services for user ${address} from database`);
+      const userDatabaseServicesResponse = await getServicesByOwnerOrAll(address); // No limit/offset, get all for user
+      const userDatabaseServices = userDatabaseServicesResponse.services;
+      console.log(`[MyServicesContext] Fetched ${userDatabaseServices.length} (total in DB for user: ${userDatabaseServicesResponse.total_count}) services from database for user ${address}`);
+      
+      // Create a map of normalized contract addresses to service names for efficient lookup
+      const contractToServiceMap = new Map<string, string>();
+      userDatabaseServices.forEach(service => {
+        if (service.provider_contract_address) {
+          const normalizedAddress = service.provider_contract_address.toLowerCase();
+          contractToServiceMap.set(normalizedAddress, service.name);
+          console.log(`[MyServicesContext] Mapped ${normalizedAddress} to name "${service.name}"`);
+        }
+      });
+
       const providerContractsData = await publicClient.readContract({
         address: contractConfig.address,
         abi: contractConfig.abi,
@@ -83,13 +104,25 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
       const contractAddresses = providerContractsData as `0x${string}`[];
       console.log("[MyServicesContext] Found provider contracts:", contractAddresses);
 
+      // Prepare initial service structures for progressive loading display
+      // These will be filled with more details progressively.
+      const initialServiceHolders = contractAddresses.map(addr => ({
+        providerContractAddress: addr,
+        isActive: false, // Default, will be updated by checkContractActive
+        serviceName: contractToServiceMap.get(addr.toLowerCase()) || generateFriendlyName(addr), // Use DB name or generate temp
+        // Other fields will be undefined initially
+      })) as ProviderServiceDetails[];
+      
+      setServices(initialServiceHolders);
+      setIsLoading(false); // <<< Key change: Set loading to false early
+
       if (contractAddresses.length === 0) {
-        setServices([]);
-        setIsLoading(false);
+        // No further processing needed if no contracts
         return;
       }
 
-      const allServiceDetails: ProviderServiceDetails[] = [];
+      // This will hold the progressively detailed services, starting with initial holders
+      let progressivelyDetailedServices = [...initialServiceHolders];
 
       for (let i = 0; i < contractAddresses.length; i += SERVICE_DETAILS_BATCH_SIZE) {
         const batchAddresses = contractAddresses.slice(i, i + SERVICE_DETAILS_BATCH_SIZE);
@@ -137,6 +170,19 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
               serviceDetail.apiEndpoint = ""; // Default or indicate error
             }
 
+            // Look up the service name in our pre-fetched map
+            const normalizedAddress = contractAddress.toLowerCase();
+            if (contractToServiceMap.has(normalizedAddress)) {
+              const name = contractToServiceMap.get(normalizedAddress);
+              serviceDetail.serviceName = name;
+              console.log(`[MyServicesContext] Found name "${name}" for ${contractAddress} in pre-fetched data`);
+            } else {
+              console.log(`[MyServicesContext] No service name found for ${contractAddress} in pre-fetched data`);
+              
+              // Generate a friendly name based on API endpoint or address
+              serviceDetail.serviceName = generateFriendlyName(contractAddress, serviceDetail.apiEndpoint);
+            }
+
             if (serviceDetail.bondingCurveAddress) {
               console.log(
                 "[MyServicesContext] Fetching market cap for BC:",
@@ -148,13 +194,33 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
               );
               if (marketCapData) {
                 // Explicitly assign fields from marketCapData
-                // This ensures that if a field is not in marketCapData (e.g. marketCap itself is optional),
-                // it will be set to undefined on serviceDetail if it was previously something else.
                 serviceDetail.marketCap = marketCapData.marketCap;
                 serviceDetail.tokenPriceInCordex = marketCapData.tokenPriceInCordex;
                 serviceDetail.tokenTotalSupply = marketCapData.tokenTotalSupply;
                 serviceDetail.actualProviderTokenAddress = marketCapData.actualProviderTokenAddress;
                 serviceDetail.tokenDecimals = marketCapData.tokenDecimals;
+
+                // If marketCapData includes actualProviderTokenAddress and tokenDecimals, fetch user balance
+                if (marketCapData.actualProviderTokenAddress && typeof marketCapData.tokenDecimals === 'number' && address) {
+                  try {
+                    const balanceRaw = await publicClient.readContract({
+                      address: marketCapData.actualProviderTokenAddress,
+                      abi: erc20Abi,
+                      functionName: 'balanceOf',
+                      args: [address],
+                    });
+                    serviceDetail.userTokenBalanceRaw = balanceRaw as bigint;
+                    // Format balance (example, assuming ethers.utils.formatUnits or similar)
+                    // For now, just store raw or a simple string. Formatting can be done in component or with a util.
+                    const formattedBalance = (Number(balanceRaw) / Math.pow(10, marketCapData.tokenDecimals)).toFixed(4);
+                    serviceDetail.userTokenBalance = formattedBalance;
+                    console.log(`[MyServicesContext] User ${address} balance for ${marketCapData.actualProviderTokenAddress}: ${formattedBalance}`);
+                  } catch (balanceError) {
+                    console.error(`[MyServicesContext] Error fetching user balance for ${marketCapData.actualProviderTokenAddress}:`, balanceError);
+                    serviceDetail.userTokenBalanceRaw = 0n;
+                    serviceDetail.userTokenBalance = "0.0000";
+                  }
+                }
               } else {
                 // Explicitly ensure market cap related fields are undefined if marketCapData is null
                 serviceDetail.marketCap = undefined;
@@ -185,6 +251,7 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
             return {
               providerContractAddress: contractAddress,
               isActive: false, // Or a more specific error state if needed
+              serviceName: generateFriendlyName(contractAddress)
             } as ProviderServiceDetails;
           }
         });
@@ -198,10 +265,25 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
         
         // Filter out nulls if any promise in the batch critically failed and returned null
         const validBatchDetails = resolvedBatchDetails.filter(details => details !== null) as ProviderServiceDetails[];
-        allServiceDetails.push(...validBatchDetails);
+        
+        // Update the progressivelyDetailedServices array with new details from this batch
+        validBatchDetails.forEach(detailedService => {
+          const indexToUpdate = progressivelyDetailedServices.findIndex(
+            s => s.providerContractAddress.toLowerCase() === detailedService.providerContractAddress.toLowerCase()
+          );
+          if (indexToUpdate !== -1) {
+            progressivelyDetailedServices[indexToUpdate] = detailedService;
+          } else {
+            // This case should ideally not happen if batchAddresses are derived from contractAddresses
+            // and progressivelyDetailedServices was initialized from contractAddresses.
+            // However, as a fallback, we could add it if it's somehow missing.
+            // progressivelyDetailedServices.push(detailedService); 
+            console.warn("[MyServicesContext] Detailed service not found in progressivelyDetailedServices array for update:", detailedService.providerContractAddress);
+          }
+        });
 
-        // Update state progressively after each batch
-        setServices([...allServiceDetails]);
+        // Update state progressively after each batch, using the updated master list
+        setServices([...progressivelyDetailedServices]);
 
         if (i + SERVICE_DETAILS_BATCH_SIZE < contractAddresses.length) {
           console.log(
@@ -213,14 +295,10 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
 
-      // Final state update with all services, though it might be redundant if progressively updated
-      // setServices(allServiceDetails); 
-      // No, the progressive update inside the loop is sufficient.
       console.log(
         "[MyServicesContext] All provider contracts processed:",
-        allServiceDetails
+        progressivelyDetailedServices // Log the final detailed list
       );
-      setIsLoading(false);
     } catch (error) {
       console.error("[MyServicesContext] Error fetching provider contracts:", error);
       setError("Failed to load your services. Please try again later.");
@@ -245,3 +323,35 @@ export const MyServicesProvider: React.FC<{ children: React.ReactNode }> = ({
     </MyServicesContext.Provider>
   );
 };
+
+// Helper function to generate a friendly name
+function generateFriendlyName(contractAddress: string, apiEndpoint?: string): string {
+  if (apiEndpoint) {
+    try {
+      // Try to parse the URL and get hostname parts
+      const url = new URL(apiEndpoint);
+      const hostParts = url.hostname.split('.');
+      
+      // Get the subdomain or first part of the hostname
+      const apiHost = hostParts[0] !== 'www' ? hostParts[0] : hostParts[1];
+      
+      if (apiHost && apiHost !== 'localhost' && apiHost !== '127.0.0.1') {
+        // Capitalize the first letter and make a friendly name
+        return apiHost.charAt(0).toUpperCase() + apiHost.slice(1) + ' Service';
+      }
+    } catch (e) {
+      // URL parsing failed, try simple string splitting
+      const parts = apiEndpoint.split('//');
+      if (parts.length > 1) {
+        const hostPart = parts[1].split('/')[0].split('.')[0];
+        if (hostPart && hostPart !== 'localhost' && hostPart !== '127.0.0.1') {
+          return hostPart.charAt(0).toUpperCase() + hostPart.slice(1) + ' Service';
+        }
+      }
+    }
+  }
+  
+  // If no API endpoint or parsing failed, use the last 6 chars of contract address
+  const lastSix = contractAddress.substring(contractAddress.length - 6);
+  return `My Service ${lastSix}`;
+}

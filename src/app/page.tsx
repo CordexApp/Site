@@ -1,13 +1,18 @@
 import ServiceList from "@/components/ServiceList";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { TypedText } from "@/components/ui/TypedText";
-import { getAllServices } from "@/services/servicesService";
+import { getServicesByOwnerOrAll } from "@/services/servicesService";
 import { Service } from "@/types/service";
 
+const INITIAL_PAGE_LIMIT = 12;
+
 export default async function Home() {
-  // Fetch initial services
-  let services: Service[] = await getAllServices();
-  console.log("[ServerPage] Initial services fetched:", services.length);
+  // Fetch initial services (first page)
+  const initialData = await getServicesByOwnerOrAll(undefined, INITIAL_PAGE_LIMIT, 0);
+  const initialServices: Service[] = initialData.services;
+  const totalServices = initialData.total_count;
+  
+  console.log(`[ServerPage] Initial services fetched: ${initialServices.length} of ${totalServices}`);
 
   return (
     <div className="container mx-auto py-8 px-4 text-white">
@@ -20,7 +25,7 @@ export default async function Home() {
       </div>
 
       <h2 className="text-2xl font-semibold mt-10 mb-6">Available Services</h2>
-      <ServiceList initialServices={services} />
+      <ServiceList initialServices={initialServices} totalServices={totalServices} initialLimit={INITIAL_PAGE_LIMIT} />
     </div>
   );
 }

@@ -226,6 +226,13 @@ export function useTokenDashboard(
     }
   };
 
+  // Simple cache for token data
+  const tokenDataCache: Record<string, { data: any; timestamp: number }> = {};
+  const TOKEN_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+  
+  // Hardcoded total supply - always 1 million
+  const HARDCODED_TOTAL_SUPPLY = "1000000";
+
   // Function to refresh bonding curve data
   const refreshBondingCurveInfo = async (
     curveAddressOverride?: `0x${string}` | null
@@ -241,6 +248,17 @@ export function useTokenDashboard(
       console.log(
         "[refreshBondingCurveInfo] Early exit - missing client or address"
       );
+      return;
+    }
+    
+    // Check cache for recent data
+    const cacheKey = `bc-${curveAddress}`;
+    const cachedData = tokenDataCache[cacheKey];
+    const now = Date.now();
+    
+    if (cachedData && (now - cachedData.timestamp) < TOKEN_CACHE_TTL) {
+      console.log("[refreshBondingCurveInfo] Using cached bonding curve data");
+      setBondingCurveInfo(cachedData.data);
       return;
     }
 
@@ -294,11 +312,19 @@ export function useTokenDashboard(
         );
       }
 
-      setBondingCurveInfo({
+      const newBondingCurveInfo = {
         currentPrice: price,
         tokenSupply: formatEther(supply),
         cordexTokenAddress: cordexAddress,
-      });
+      };
+      
+      // Cache the results
+      tokenDataCache[cacheKey] = {
+        data: newBondingCurveInfo,
+        timestamp: Date.now()
+      };
+      
+      setBondingCurveInfo(newBondingCurveInfo);
 
       // Check allowances if wallet is connected
       if (walletAddress && cordexAddress && tokenInfo.address) {
@@ -425,15 +451,9 @@ export function useTokenDashboard(
           functionName: "name",
         })) as string;
 
-        // Get total supply of the token
-        const totalSupplyBigInt = (await publicClient.readContract({
-          address: tokenAddress,
-          abi: ERC20Abi as Abi,
-          functionName: "totalSupply",
-        })) as bigint;
-        
-        const totalSupply = formatEther(totalSupplyBigInt);
-        console.log("[useTokenDashboard] Token total supply:", totalSupply);
+        // Use hardcoded total supply instead of making an RPC call
+        const totalSupply = HARDCODED_TOTAL_SUPPLY;
+        console.log("[useTokenDashboard] Using hardcoded token total supply:", totalSupply);
 
         // Update token information state
         const newTokenInfo = {

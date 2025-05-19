@@ -9,11 +9,14 @@ import { optimismSepolia } from "wagmi/chains";
 
 interface ServiceListProps {
   initialServices: Service[];
+  totalServices: number;
+  initialLimit: number;
 }
 
-const MARKET_CAP_POLL_INTERVAL = 300000; // 5 minutes
-const BATCH_SIZE = 5; // Process 5 services per batch
-const DELAY_BETWEEN_BATCHES = 500; // 0.5 second delay between batches
+// Increased polling interval to 10 minutes (was 5 min)
+const MARKET_CAP_POLL_INTERVAL = 600000; // 10 minutes
+const BATCH_SIZE = 3; // Reduced from 5 to 3 services per batch
+const DELAY_BETWEEN_BATCHES = 1000; // Increased from 500ms to 1000ms delay between batches
 
 // Function to create a public client
 function getPublicClient(): PublicClient | null {
@@ -35,14 +38,35 @@ function getPublicClient(): PublicClient | null {
   }
 }
 
-export default function ServiceList({ initialServices }: ServiceListProps) {
-  const [services, setServices] = useState<Service[]>(initialServices);
+// Throttle function to prevent too many calls in quick succession
+function throttle<T extends (...args: any[]) => any>(
+  func: T,
+  limit: number
+): (...args: Parameters<T>) => void {
+  let inThrottle = false;
+  return function(this: any, ...args: Parameters<T>): void {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
+  };
+}
+
+export default function ServiceList({ initialServices, totalServices, initialLimit }: ServiceListProps) {
+  const [allLoadedServices, setAllLoadedServices] = useState<Service[]>(initialServices);
+  const [currentOffset, setCurrentOffset] = useState<number>(initialServices.length);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [errorLoadingMore, setErrorLoadingMore] = useState<string | null>(null);
+  
   const [loadingMarketCaps, setLoadingMarketCaps] = useState(true);
-  const publicClient = useMemo(() => getPublicClient(), []);
+  const [lastPollingTime, setLastPollingTime] = useState<number>(0);
+  const publicClient: any = useMemo(() => getPublicClient(), []);
 
   // Update local services state if initialServices prop changes
   useEffect(() => {
-    setServices(initialServices);
+    setAllLoadedServices(initialServices);
+    setCurrentOffset(initialServices.length); // Reset offset when initial services change
   }, [initialServices]);
 
   const fetchMarketCapsForServiceList = useCallback(
@@ -58,6 +82,9 @@ export default function ServiceList({ initialServices }: ServiceListProps) {
         "[ServiceList] Starting to fetch/update market cap details for services:",
         servicesToUpdate.map(s => s.id)
       );
+
+      // Record the time we started polling
+      setLastPollingTime(Date.now());
 
       // Create a new array for updates to avoid mutating state directly during async operations
       let newServiceData = [...servicesToUpdate];
@@ -126,7 +153,16 @@ export default function ServiceList({ initialServices }: ServiceListProps) {
         await Promise.all(batchPromises.map(p => p.catch(e => console.error("Error in batch promise:", e))));
         
         // Update state after each batch is processed
-        setServices([...newServiceData]);
+        setAllLoadedServices(prevAllServices => {
+          const updatedList = [...prevAllServices];
+          newServiceData.slice(i, i + BATCH_SIZE).forEach(updatedServiceFromBatch => {
+            const idx = updatedList.findIndex(s => s.id === updatedServiceFromBatch.id);
+            if (idx !== -1) {
+              updatedList[idx] = { ...updatedList[idx], ...updatedServiceFromBatch };
+            }
+          });
+          return updatedList;
+        });
 
         if (i + BATCH_SIZE < newServiceData.length) {
           console.log(`[ServiceList] Waiting ${DELAY_BETWEEN_BATCHES}ms before next batch...`);
@@ -141,45 +177,68 @@ export default function ServiceList({ initialServices }: ServiceListProps) {
     [publicClient] // Only publicClient is a stable dependency here
   );
 
-  // Effect for initial fetch when component mounts or initialServices change
+  // Throttled version of the fetch function to prevent too many calls
+  const throttledFetchMarketCaps = useMemo(
+    () => throttle(fetchMarketCapsForServiceList, 5000), // 5 second throttle
+    [fetchMarketCapsForServiceList]
+  );
+
+  // Effect for initial market cap fetch when component mounts or relevant services change
   useEffect(() => {
-    if (initialServices.length > 0 && publicClient) {
-      fetchMarketCapsForServiceList(initialServices);
-    } else if (initialServices.length === 0) {
-      setServices([]); // Clear services if initialServices is empty
+    if (allLoadedServices.length > 0 && publicClient) {
+      // Fetch market caps for all currently loaded services
+      throttledFetchMarketCaps(allLoadedServices);
+    } else if (allLoadedServices.length === 0) {
       setLoadingMarketCaps(false);
     }
-  }, [initialServices, publicClient, fetchMarketCapsForServiceList]);
+  }, [allLoadedServices, publicClient, throttledFetchMarketCaps]);
 
-  // Effect for polling market cap data
+  // Effect for polling market cap data - only poll if enough time has passed
   useEffect(() => {
     if (!publicClient) return;
 
     const intervalId = setInterval(() => {
-      console.log("[ServiceList] Polling for market cap updates...");
-      // Use the functional update form of setServices to get the current services
-      // Then trigger fetchMarketCapsForServiceList with that current list.
-      // fetchMarketCapsForServiceList itself will call setServices.
-      // We need to ensure services in the closure of setInterval is up-to-date.
-      // Passing `services` directly to fetchMarketCapsForServiceList from here is tricky due to stale closures.
-      // Instead, fetchMarketCapsForServiceList will operate on the `services` state via `setServices(prev => ...)`.
-      // Or, more directly, let's re-evaluate if `fetchMarketCapsForServiceList` needs current state or `initialServices`
-      // For polling, we want to update the *currently displayed* services.
-      
-      // A better way for polling: fetchMarketCapsForServiceList should be self-contained or use a ref for current services.
-      // Given current structure, we call it with the `services` available in this scope.
-      // The `services` dependency in the outer useEffect for polling will ensure it uses the latest.
-      // This will re-run the fetch if `services` state changes from other sources, which is fine.
-      if (services.length > 0) {
-         fetchMarketCapsForServiceList(services);
-      }
+      const now = Date.now();
+      const timeSinceLastPoll = now - lastPollingTime;
 
+      // Only poll if we haven't polled recently and we have services to update
+      if (timeSinceLastPoll >= MARKET_CAP_POLL_INTERVAL && allLoadedServices.length > 0) {
+        console.log("[ServiceList] Polling for market cap updates...");
+        throttledFetchMarketCaps(allLoadedServices);
+      }
     }, MARKET_CAP_POLL_INTERVAL);
 
     return () => clearInterval(intervalId);
-  }, [publicClient, services, fetchMarketCapsForServiceList]); // Add services and fetchMarketCapsForServiceList
+  }, [publicClient, allLoadedServices, lastPollingTime, throttledFetchMarketCaps]);
 
-  if (initialServices.length === 0 && !loadingMarketCaps) {
+  const handleLoadMore = async () => {
+    if (isLoadingMore || currentOffset >= totalServices) return;
+
+    setIsLoadingMore(true);
+    setErrorLoadingMore(null);
+    try {
+      // We need getServicesByOwnerOrAll here
+      // It's better to import it directly rather than passing as prop
+      const { getServicesByOwnerOrAll } = await import("@/services/servicesService");
+      const nextPageData = await getServicesByOwnerOrAll(undefined, initialLimit, currentOffset);
+      
+      setAllLoadedServices(prevServices => [...prevServices, ...nextPageData.services]);
+      setCurrentOffset(prevOffset => prevOffset + nextPageData.services.length);
+      
+      // Fetch market caps for the newly added services
+      if (nextPageData.services.length > 0 && publicClient) {
+        throttledFetchMarketCaps(nextPageData.services); 
+      }
+
+    } catch (err) {
+      console.error("[ServiceList] Error loading more services:", err);
+      setErrorLoadingMore("Failed to load more services.");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  if (initialServices.length === 0 && !loadingMarketCaps && !isLoadingMore) {
     return (
       <div className="w-full mt-6 bg-gray-900 p-8 text-center rounded-md">
         <p className="text-gray-400">No services currently available. Check back soon!</p>
@@ -187,5 +246,21 @@ export default function ServiceList({ initialServices }: ServiceListProps) {
     );
   }
 
-  return <Grid services={services} />;
+  return (
+    <>
+      <Grid services={allLoadedServices} />
+      {currentOffset < totalServices && (
+        <div className="mt-8 text-center">
+          <button
+            onClick={handleLoadMore}
+            disabled={isLoadingMore}
+            className="px-6 py-3 border border-white text-white font-medium hover:bg-white hover:text-black transition-colors disabled:opacity-50 rounded-md"
+          >
+            {isLoadingMore ? "Loading..." : "Load More Services"}
+          </button>
+        </div>
+      )}
+      {errorLoadingMore && <p className="mt-4 text-center text-red-500">{errorLoadingMore}</p>}
+    </>
+  );
 } 

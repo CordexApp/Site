@@ -1,7 +1,7 @@
 import {
-  formatEther,
-  PublicClient,
-  TransactionReceipt
+    formatEther,
+    PublicClient,
+    TransactionReceipt
 } from "viem";
 import { usePublicClient, useWriteContract } from "wagmi";
 
@@ -125,7 +125,13 @@ export const getBondingCurveContract = async (
   providerContractAddress: `0x${string}`
 ): Promise<`0x${string}` | null> => {
   try {
-    if (!publicClient) return null;
+    if (!publicClient) {
+      console.log("[bondingCurveServices] Public client is undefined");
+      return null;
+    }
+    
+    console.log(`[bondingCurveServices] Checking bonding curve for provider: ${providerContractAddress}`);
+    
     const bondingCurveAddress = await publicClient.readContract({
       address: FACTORY_ADDRESS,
       abi: factoryAbi,
@@ -133,11 +139,15 @@ export const getBondingCurveContract = async (
       args: [providerContractAddress],
     });
 
+    console.log(`[bondingCurveServices] Raw bonding curve address result: ${bondingCurveAddress}`);
+
     // Check if address is zero address (means no bonding curve)
     if (bondingCurveAddress === "0x0000000000000000000000000000000000000000") {
+      console.log(`[bondingCurveServices] No bonding curve found for provider: ${providerContractAddress}`);
       return null;
     }
 
+    console.log(`[bondingCurveServices] Found bonding curve: ${bondingCurveAddress} for provider: ${providerContractAddress}`);
     return bondingCurveAddress as `0x${string}`;
   } catch (err) {
     console.error(
