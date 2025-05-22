@@ -54,6 +54,7 @@ export function LaunchServiceFlow() {
   const [providerContractAddress, setProviderContractAddress] = useState<string | null>(null);
   const [providerTokenAddress, setProviderTokenAddress] = useState<string | null>(null);
   const [bondingCurveAddress, setBondingCurveAddress] = useState<string | null>(null);
+  const [createdServiceId, setCreatedServiceId] = useState<string | null>(null);
   
   // Defaults for bonding curve
   const DEFAULT_SLOPE = ethers.utils.parseUnits('0.05', 18); // 0.05 with 18 decimals
@@ -192,7 +193,7 @@ export function LaunchServiceFlow() {
             
             if (uploadResponse.ok) {
               // Construct the public URL (adjust based on your S3 configuration)
-              imageUrl = `${process.env.NEXT_PUBLIC_S3_PUBLIC_URL || 'https://cordex-service-images.s3.amazonaws.com'}/${object_key}`;
+              imageUrl = `${process.env.NEXT_PUBLIC_S3_PUBLIC_URL || 'https://cordex-service-images.s3.us-west-2.amazonaws.com'}/${object_key}`;
               console.log('Image uploaded successfully:', imageUrl);
             } else {
               console.error('Failed to upload image:', await uploadResponse.text());
@@ -218,10 +219,11 @@ export function LaunchServiceFlow() {
       };
 
       const createdService = await createService(serviceToCreate);
-      if (!createdService) {
-        throw new Error('Failed to register the service with the backend.');
+      if (!createdService || !createdService.id) {
+        throw new Error('Failed to register the service with the backend or missing service ID.');
       }
       console.log('Service registered with backend:', createdService);
+      setCreatedServiceId(createdService.id);
       
       setCurrentStep('complete');
       
@@ -244,14 +246,18 @@ export function LaunchServiceFlow() {
   };
 
   const handleRedirectToManage = () => {
-    if (providerContractAddress) {
-      router.push(`/service/${providerContractAddress}`);
+    if (createdServiceId) {
+      router.push(`/service/${createdServiceId}`);
+    } else if (providerContractAddress) {
+      console.warn("Redirecting with contract address as service ID is not available yet.");
+      router.push(`/manage-service/${providerContractAddress}`);
     }
   };
 
   // Function to handle image selection
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    console.log('[LaunchServiceFlow] handleImageChange triggered. File:', file);
     if (file) {
       setImageFile(file);
       const reader = new FileReader();
@@ -474,7 +480,7 @@ export function LaunchServiceFlow() {
             </div>
             
             <button 
-              onClick={() => router.push(`/service/${providerContractAddress}`)}
+              onClick={handleRedirectToManage}
               className="px-4 py-2 border border-white text-white font-medium hover:bg-white hover:text-black transition-colors cursor-pointer flex justify-center items-center mt-4"
             >
               View Your Service

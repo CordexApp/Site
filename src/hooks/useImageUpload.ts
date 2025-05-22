@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { getUploadPresignedUrl } from "@/services/servicesService";
+import { useState } from "react";
 
 export default function useImageUpload() {
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -65,7 +65,7 @@ export default function useImageUpload() {
       }
 
       // Construct the S3 URL (this is a standard S3 URL format)
-      const s3BucketUrl =
+      const s3BucketUrl = process.env.NEXT_PUBLIC_S3_PUBLIC_URL || 
         "https://cordex-service-images.s3.us-west-2.amazonaws.com";
       const finalUrl = `${s3BucketUrl}/${presignedData.object_key}`;
       console.log("Image uploaded successfully, URL:", finalUrl);
