@@ -14,10 +14,8 @@ export default function Header() {
           Cordex
         </Link>
       </div>
-      <nav className="flex items-center gap-6">
-        <Link href="/protocol" className="hover:text-gray-300">
-          Protocol
-        </Link>
+      <nav className="flex items-center space-x-6">
+        <Link href="/about">how it works</Link>
         {isConnected && (
           <Link href="/my-services" className="hover:text-gray-300">
             My Services
