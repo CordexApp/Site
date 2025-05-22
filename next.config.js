@@ -3,30 +3,17 @@
 const nextConfig = {
   /* config options here */
   output: "standalone",
-  serverExternalPackages: ["sharp"],
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "cordex-service-images.s3.us-west-2.amazonaws.com",
-        port: "",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "cordex-service-images.s3.amazonaws.com",
-        port: "",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "*.amazonaws.com",
-        port: "",
-        pathname: "/**",
-      },
-    ],
     unoptimized: true,
   },
+  // Exclude backup directories from the build
+  webpack: (config) => {
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: ['**/backup/**', '**/backup-original/**', '**/node_modules/**']
+    };
+    return config;
+  }
 };
 
 module.exports = nextConfig; 
