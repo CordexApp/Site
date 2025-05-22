@@ -28,7 +28,7 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN if [ -f next.config.js ]; then echo "Using existing next.config.js"; else echo "No next.config.js found"; exit 1; fi
 
 # Build the application with verbose logging
-RUN npm run build:verbose
+RUN npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
