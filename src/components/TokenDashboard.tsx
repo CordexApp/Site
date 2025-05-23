@@ -31,7 +31,6 @@ export default function TokenDashboard({
     chartData,
     chartTimeframe,
     availableTimeframes,
-    isChartLoading,
     // Tab state
     activeTab,
     setActiveTab,
@@ -118,7 +117,6 @@ export default function TokenDashboard({
               timeframe={chartTimeframe}
               onTimeframeChange={handleTimeframeChange}
               availableTimeframes={availableTimeframes}
-              isLoading={isChartLoading}
               symbol={tokenInfo.symbol || "token"}
             />
           </div>

@@ -1,4 +1,5 @@
 import { ERC20Abi } from "@/abis/ERC20";
+import { TIMEFRAME_ORDER } from "@/config";
 import {
     approveTokens,
     buyTokens,
@@ -18,7 +19,7 @@ import {
     getOHLCVData,
     OHLCVCandle,
 } from "@/services/tradingDataService";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     Abi,
     decodeEventLog,
@@ -110,10 +111,14 @@ export function useTokenDashboard(
   // Chart state
   const [chartData, setChartData] = useState<OHLCVCandle[]>([]);
   const [chartTimeframe, setChartTimeframe] = useState<string>("1h");
-  const [availableTimeframes, setAvailableTimeframes] = useState<string[]>([
-    "1h",
-  ]);
-  const [isChartLoading, setIsChartLoading] = useState<boolean>(false);
+  const [availableTimeframes, setAvailableTimeframes] = useState<string[]>(
+    TIMEFRAME_ORDER
+  );
+  
+  // Add caching for chart data
+  const chartDataCache = useRef<Record<string, { data: OHLCVCandle[], timestamp: number }>>({});
+  const CHART_CACHE_TTL = 60000; // 60 seconds cache
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<"buy" | "sell">("buy");
@@ -340,20 +345,33 @@ export function useTokenDashboard(
   };
 
   // Function to fetch chart data
-  const fetchChartData = async () => {
+  const fetchChartData = async (forceRefresh = false) => {
     if (!bondingCurveAddress) return;
 
-    setIsChartLoading(true);
-
     try {
-      // Fetch the available timeframes first
-      const timeframes = await getAvailableTimeframes(bondingCurveAddress);
-      if (timeframes.length > 0) {
-        setAvailableTimeframes(timeframes);
+      // Check cache first (unless force refresh)
+      const cacheKey = `${bondingCurveAddress}-${chartTimeframe}`;
+      const cachedData = chartDataCache.current[cacheKey];
+      
+      if (!forceRefresh && cachedData && (Date.now() - cachedData.timestamp) < CHART_CACHE_TTL) {
+        console.log(`[useTokenDashboard] Using cached data for ${chartTimeframe}`);
+        setChartData(cachedData.data);
+        return;
+      }
 
-        // If current timeframe is not available, use the first one
-        if (!timeframes.includes(chartTimeframe)) {
-          setChartTimeframe(timeframes[0]);
+      console.log(`[useTokenDashboard] Fetching fresh data for ${chartTimeframe}`);
+
+      // Only fetch available timeframes if we don't have them yet or they're empty
+      if (availableTimeframes.length === 0 || availableTimeframes === TIMEFRAME_ORDER) {
+        const timeframes = await getAvailableTimeframes(bondingCurveAddress);
+        if (timeframes.length > 0) {
+          setAvailableTimeframes(timeframes);
+
+          // If current timeframe is not available, use the first one
+          if (!timeframes.includes(chartTimeframe)) {
+            setChartTimeframe(timeframes[0]);
+            return; // This will trigger another call with the new timeframe
+          }
         }
       }
 
@@ -365,6 +383,11 @@ export function useTokenDashboard(
       );
 
       if (response.candles.length > 0) {
+        // Cache the data
+        chartDataCache.current[cacheKey] = {
+          data: response.candles,
+          timestamp: Date.now()
+        };
         setChartData(response.candles);
       } else {
         setChartData([]);
@@ -372,14 +395,31 @@ export function useTokenDashboard(
     } catch (error) {
       console.error("Error fetching chart data:", error);
       setChartData([]);
-    } finally {
-      setIsChartLoading(false);
     }
   };
 
-  // Handle timeframe change
+  // Handle timeframe change with debouncing
   const handleTimeframeChange = (timeframe: string) => {
+    // Clear any pending fetch
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
+    }
+    
     setChartTimeframe(timeframe);
+    
+    // Check if we have cached data for this timeframe
+    const cacheKey = `${bondingCurveAddress}-${timeframe}`;
+    const cachedData = chartDataCache.current[cacheKey];
+    
+    if (cachedData && (Date.now() - cachedData.timestamp) < CHART_CACHE_TTL) {
+      console.log(`[useTokenDashboard] Instant switch to cached ${timeframe} data`);
+      setChartData(cachedData.data);
+    } else {
+      // Debounce the API call for non-cached data
+      fetchTimeoutRef.current = setTimeout(() => {
+        fetchChartData(false);
+      }, 100); // 100ms debounce
+    }
   };
 
   // Define the event ABI item string for parsing
@@ -515,9 +555,37 @@ export function useTokenDashboard(
   // Fetch chart data when bonding curve address or timeframe changes
   useEffect(() => {
     if (fetchChartDataEnabled && bondingCurveAddress) {
-      fetchChartData(); // Initial fetch
-      const intervalId = setInterval(fetchChartData, 60000); // Refresh every 60 seconds
-      return () => clearInterval(intervalId);
+      // Clear any pending timeout when dependencies change
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+      
+      fetchChartData(false); // Initial fetch with caching
+      
+      // Dynamic polling interval based on timeframe - shorter timeframes need more frequent updates
+      const getPollingInterval = (timeframe: string) => {
+        switch (timeframe) {
+          case '1m':
+            return 8000;  // 8 seconds for 1-minute charts (increased from 5s)
+          case '5m':
+            return 12000; // 12 seconds for 5-minute charts (increased from 8s)
+          case '15m':
+            return 15000; // 15 seconds for 15-minute charts (increased from 12s)
+          default:
+            return 20000; // 20 seconds for longer timeframes (increased from 10s)
+        }
+      };
+      
+      const intervalId = setInterval(() => {
+        fetchChartData(true); // Force refresh on polling
+      }, getPollingInterval(chartTimeframe));
+      
+      return () => {
+        clearInterval(intervalId);
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current);
+        }
+      };
     }
   }, [fetchChartDataEnabled, bondingCurveAddress, chartTimeframe]);
 
@@ -535,12 +603,15 @@ export function useTokenDashboard(
     tokenInfo.address
   ]);
 
-  // Add Contract Event Listener
+  // Add Contract Event Listener with better error handling
   useWatchContractEvent({
     address: bondingCurveAddress || undefined,
     abi: [tradeActivityEventAbi],
     eventName: "TradeActivity",
     enabled: !!bondingCurveAddress,
+    // Add polling configuration to reduce filter usage
+    poll: true,
+    pollingInterval: 5000, // Poll every 5 seconds instead of using persistent filters
     onLogs(logs: Log[]) {
       console.log("[useTokenDashboard] TradeActivity Event Received:", logs);
       logs.forEach((log) => {
@@ -577,14 +648,18 @@ export function useTokenDashboard(
 
               // Delay chart data fetch to allow backend processing
               console.log(
-                "[useTokenDashboard] Scheduling chart data refresh in 5 seconds..."
+                "[useTokenDashboard] Scheduling chart data refresh in 2 seconds..."
               );
+              
+              // Shorter delay for short timeframes where users expect faster updates
+              const delay = (chartTimeframe === '1m' || chartTimeframe === '5m') ? 1000 : 2000;
+              
               setTimeout(() => {
                 console.log(
                   "[useTokenDashboard] Fetching delayed chart data..."
                 );
                 fetchChartData();
-              }, 5000); // 5 second delay
+              }, delay); // Dynamic delay based on timeframe
             } else {
               console.error(
                 "[useTokenDashboard] Failed to decode event args:",
@@ -607,10 +682,14 @@ export function useTokenDashboard(
       });
     },
     onError(error) {
-      console.error(
-        "[useTokenDashboard] Error watching TradeActivity events:",
-        error
-      );
+      // Improved error handling - don't log filter errors as they're expected with Infura
+      const errorMessage = error.message || error.toString();
+      if (errorMessage.includes('filter') || errorMessage.includes('resource not found')) {
+        // These are common with Infura and not critical errors
+        console.warn("[useTokenDashboard] Filter/resource error (non-critical):", errorMessage);
+      } else {
+        console.error("[useTokenDashboard] Event watching error:", error);
+      }
     },
   });
 
@@ -935,7 +1014,6 @@ export function useTokenDashboard(
     chartData,
     chartTimeframe,
     availableTimeframes,
-    isChartLoading,
     activeTab,
     setActiveTab,
     handleBuyAmountChange,

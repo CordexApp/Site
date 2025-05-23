@@ -1,26 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import {
-  createChart,
-  ColorType,
-  IChartApi,
-  ISeriesApi,
-  CandlestickData,
-  UTCTimestamp,
-  CandlestickSeries,
-  LastPriceAnimationMode,
-  Time,
-} from "lightweight-charts";
+import { TIMEFRAME_LABELS, TIMEFRAME_ORDER } from "@/config";
 import { OHLCVCandle } from "@/services/tradingDataService";
-import { LoadingDots } from "@/components/ui/LoadingDots";
+import {
+    CandlestickData,
+    CandlestickSeries,
+    ColorType,
+    createChart,
+    IChartApi,
+    ISeriesApi,
+    UTCTimestamp
+} from "lightweight-charts";
+import { useEffect, useRef } from "react";
 
 interface PriceChartProps {
   data: OHLCVCandle[];
   timeframe: string;
   onTimeframeChange?: (timeframe: string) => void;
   availableTimeframes?: string[];
-  isLoading?: boolean;
   symbol?: string;
 }
 
@@ -28,8 +25,7 @@ export default function PriceChart({
   data,
   timeframe,
   onTimeframeChange,
-  availableTimeframes = ["1m", "5m", "15m", "1h", "4h", "1d"],
-  isLoading = false,
+  availableTimeframes = TIMEFRAME_ORDER,
   symbol = "Token",
 }: PriceChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -157,22 +153,7 @@ export default function PriceChart({
 
   // Format display text for timeframe
   const formatTimeframe = (tf: string) => {
-    switch (tf) {
-      case "1m":
-        return "1 min";
-      case "5m":
-        return "5 min";
-      case "15m":
-        return "15 min";
-      case "1h":
-        return "1 hour";
-      case "4h":
-        return "4 hours";
-      case "1d":
-        return "1 day";
-      default:
-        return tf;
-    }
+    return TIMEFRAME_LABELS[tf] || tf;
   };
 
   return (
@@ -198,13 +179,7 @@ export default function PriceChart({
       </div>
 
       <div ref={chartContainerRef} className="relative h-[400px] w-full">
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-10">
-            <LoadingDots text="Loading chart data" />
-          </div>
-        )}
-
-        {!isLoading && data.length === 0 && (
+        {!data.length && (
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-gray-400">No trading data available</span>
           </div>
