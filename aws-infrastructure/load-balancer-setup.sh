@@ -22,7 +22,7 @@ TARGET_GROUP_ARN=$(aws elbv2 create-target-group \
   --port 3000 \
   --vpc-id $VPC_ID \
   --target-type ip \
-  --health-check-path / \
+  --health-check-path /health \
   --health-check-interval-seconds 30 \
   --region $AWS_REGION \
   --query 'TargetGroups[0].TargetGroupArn' \
