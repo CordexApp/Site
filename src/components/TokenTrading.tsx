@@ -1,8 +1,8 @@
 import React from "react";
+import { InputLabel } from "./ui";
+import { LoadingDots } from "./ui/LoadingDots";
 import { NumericInput } from "./ui/NumericInput";
 import { PrimaryButton } from "./ui/PrimaryButton";
-import { LoadingDots } from "./ui/LoadingDots";
-import { InputLabel } from "./ui";
 import { SecondaryButton } from "./ui/SecondaryButton";
 
 interface TokenTradingProps {
@@ -29,6 +29,8 @@ interface TokenTradingProps {
   blockExplorerUrl: string | null;
   activeTab: "buy" | "sell";
   tokenBalance: string | null | undefined;
+  accumulatedFees: string | null | undefined;
+  maxSellableAmount: string | null | undefined;
   handleBuyAmountChange: (amount: string) => void;
   handleSellAmountChange: (amount: string) => void;
   approveBuy: () => void;
@@ -48,6 +50,8 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
   blockExplorerUrl,
   activeTab,
   tokenBalance,
+  accumulatedFees,
+  maxSellableAmount,
   handleBuyAmountChange,
   handleSellAmountChange,
   approveBuy,
@@ -61,6 +65,13 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
   const hasInsufficientTokenBalance = () => {
     if (!tokenBalance || !sellState.amount) return false;
     return Number(sellState.amount) > Number(tokenBalance);
+  };
+
+  // Calculate if the sell amount would exceed available liquidity
+  const exceedsLiquidityLimit = () => {
+    if (!maxSellableAmount || !sellState.amount) return false;
+    // Check if user's sell amount exceeds what would drain all liquidity
+    return Number(sellState.amount) > Number(maxSellableAmount);
   };
 
   return (
@@ -93,6 +104,20 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
       {tokenBalance !== null && tokenBalance !== undefined && (
         <div className="text-sm text-gray-400 mb-3">
           your balance: {Number(tokenBalance).toFixed(4)}{" "}
+          {tokenSymbol || "tokens"}
+        </div>
+      )}
+
+      {/* ADDED: Liquidity and limit information */}
+      {accumulatedFees !== null && accumulatedFees !== undefined && (
+        <div className="text-sm text-gray-400 mb-3">
+          available liquidity: {Number(accumulatedFees).toFixed(4)} CORDEX
+        </div>
+      )}
+
+      {maxSellableAmount !== null && maxSellableAmount !== undefined && (
+        <div className="text-sm text-gray-400 mb-3">
+          total sellable until liquidity exhausted: {Number(maxSellableAmount).toFixed(4)}{" "}
           {tokenSymbol || "tokens"}
         </div>
       )}
@@ -181,7 +206,7 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
         ) : (
           <div className="space-y-4">
             <div>
-              <InputLabel>amount of CORDEX to sell</InputLabel>
+              <InputLabel>amount of {tokenSymbol || "tokens"} to sell</InputLabel>
               <div className="flex items-center space-x-2 w-full">
                 <NumericInput
                   value={sellState.amount}
@@ -211,6 +236,12 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
               </p>
             )}
 
+            {exceedsLiquidityLimit() && (
+              <p className="text-cordex-red text-sm">
+                sell amount would exceed available liquidity in bonding curve
+              </p>
+            )}
+
             {sellState.hasAllowance ? (
               <PrimaryButton
                 onClick={executeSell}
@@ -218,7 +249,8 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
                   !sellState.amount ||
                   sellState.isProcessing ||
                   Number(sellState.amount) <= 0 ||
-                  hasInsufficientTokenBalance()
+                  hasInsufficientTokenBalance() ||
+                  exceedsLiquidityLimit()
                 }
               >
                 {sellState.isProcessing ? (

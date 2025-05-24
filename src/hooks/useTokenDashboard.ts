@@ -5,8 +5,10 @@ import {
     buyTokens,
     calculatePrice,
     findBondingCurveForProviderToken,
+    getAccumulatedFees,
     getCordexTokenAddress,
     getCurrentPrice,
+    getMaxSellableAmount,
     getSellPayoutEstimate,
     getTokenAllowance,
     getTokenSupply,
@@ -48,6 +50,8 @@ export interface TokenInfo {
 export interface BondingCurveInfo {
   currentPrice: string;
   tokenSupply: string;
+  accumulatedFees: string;
+  maxSellableAmount: string;
   cordexTokenAddress: `0x${string}` | null;
 }
 
@@ -88,6 +92,8 @@ export function useTokenDashboard(
   const [bondingCurveInfo, setBondingCurveInfo] = useState<BondingCurveInfo>({
     currentPrice: "0",
     tokenSupply: "0",
+    accumulatedFees: "0",
+    maxSellableAmount: "0",
     cordexTokenAddress: null,
   });
   const [buyState, setBuyState] = useState<TradingState>({
@@ -242,6 +248,7 @@ export function useTokenDashboard(
   const refreshBondingCurveInfo = async (
     curveAddressOverride?: `0x${string}` | null
   ) => {
+    console.log("🔄 [refreshBondingCurveInfo] FUNCTION CALLED - START");
     const curveAddress = curveAddressOverride || bondingCurveAddress;
 
     console.log("[refreshBondingCurveInfo] Function called with:", {
@@ -256,12 +263,17 @@ export function useTokenDashboard(
       return;
     }
     
-    // Check cache for recent data
+    // Check cache for recent data (skip cache if we need to recalculate max sellable due to balance change)
     const cacheKey = `bc-${curveAddress}`;
     const cachedData = tokenDataCache[cacheKey];
     const now = Date.now();
     
-    if (cachedData && (now - cachedData.timestamp) < TOKEN_CACHE_TTL) {
+    // Only use cache if we have user balance in both cached and current state, or neither has balance
+    const shouldUseCache = cachedData && 
+      (now - cachedData.timestamp) < TOKEN_CACHE_TTL &&
+      (!!cachedData.data.maxSellableAmount === !!tokenInfo.balance);
+    
+    if (shouldUseCache) {
       console.log("[refreshBondingCurveInfo] Using cached bonding curve data");
       setBondingCurveInfo(cachedData.data);
       return;
@@ -280,6 +292,7 @@ export function useTokenDashboard(
       // Track each promise separately to identify which one might fail
       let price = "0";
       let supply = BigInt(0);
+      let fees = BigInt(0);
       let cordexAddress: `0x${string}` | null = null;
 
       try {
@@ -302,6 +315,17 @@ export function useTokenDashboard(
       }
 
       try {
+        console.log("[refreshBondingCurveInfo] Getting accumulated fees...");
+        fees = await getAccumulatedFees(publicClient, curveAddress);
+        console.log(
+          "[refreshBondingCurveInfo] Fees retrieved:",
+          fees.toString()
+        );
+      } catch (err) {
+        console.error("[refreshBondingCurveInfo] Error getting fees:", err);
+      }
+
+      try {
         console.log(
           "[refreshBondingCurveInfo] Getting cordex token address..."
         );
@@ -317,9 +341,40 @@ export function useTokenDashboard(
         );
       }
 
+      // Calculate max sellable amount if we have user balance and wallet is connected
+      let maxSellable = BigInt(0);
+      console.log("[refreshBondingCurveInfo] Checking conditions for max sellable calculation:", {
+        walletAddress: !!walletAddress,
+        tokenBalance: tokenInfo.balance,
+        fees: fees.toString()
+      });
+      
+      if (walletAddress && tokenInfo.balance) {
+        try {
+          console.log("[refreshBondingCurveInfo] Calling getMaxSellableAmount...");
+          const userBalance = parseEther(tokenInfo.balance);
+          maxSellable = await getMaxSellableAmount(
+            publicClient,
+            curveAddress,
+            fees,
+            userBalance
+          );
+          console.log(
+            "[refreshBondingCurveInfo] Max sellable amount calculated:",
+            formatEther(maxSellable)
+          );
+        } catch (err) {
+          console.error("[refreshBondingCurveInfo] Error calculating max sellable:", err);
+        }
+      } else {
+        console.log("[refreshBondingCurveInfo] Skipping max sellable calculation - missing conditions");
+      }
+
       const newBondingCurveInfo = {
         currentPrice: price,
         tokenSupply: formatEther(supply),
+        accumulatedFees: formatEther(fees),
+        maxSellableAmount: formatEther(maxSellable),
         cordexTokenAddress: cordexAddress,
       };
       
@@ -528,6 +583,26 @@ export function useTokenDashboard(
           console.log(
             `[TokenDashboard] Completed refreshBondingCurveInfo call`
           );
+          
+          // Also fetch token balance if wallet is connected (but don't refresh again)
+          if (walletAddress && tokenAddress) {
+            console.log("[TokenDashboard] Fetching initial token balance...");
+            try {
+              const balanceBigInt = (await publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20Abi as Abi,
+                functionName: "balanceOf",
+                args: [walletAddress],
+              })) as bigint;
+              const balance = formatEther(balanceBigInt);
+              console.log(`[TokenDashboard] Initial balance fetched: ${balance}`);
+              
+              // Update token info with balance (the useEffect will handle the refresh)
+              setTokenInfo((prev) => ({ ...prev, balance }));
+            } catch (err) {
+              console.error("[TokenDashboard] Error fetching initial balance:", err);
+            }
+          }
         }
       } catch (err) {
         console.error("[TokenDashboard] Error fetching dashboard data:", err);
@@ -602,6 +677,14 @@ export function useTokenDashboard(
     bondingCurveInfo.cordexTokenAddress, 
     tokenInfo.address
   ]);
+
+  // Refresh bonding curve info when token balance changes to recalculate max sellable amount
+  useEffect(() => {
+    if (publicClient && bondingCurveAddress && tokenInfo.balance && walletAddress) {
+      console.log("[useTokenDashboard] Token balance changed, recalculating max sellable amount");
+      refreshBondingCurveInfo();
+    }
+  }, [tokenInfo.balance, publicClient, bondingCurveAddress, walletAddress]);
 
   // Add Contract Event Listener with better error handling
   useWatchContractEvent({

@@ -77,6 +77,13 @@ export const BondingCurveAbi = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [],
+    name: "getMaxSellableAmount",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
 
   // --- Write Functions ---
   {

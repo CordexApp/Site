@@ -1,9 +1,8 @@
 // Contract services for Cordex service deployment
-import { parseEther, formatEther } from "viem";
+import { parseEther } from "viem";
 import {
-  useWriteContract,
-  useWaitForTransactionReceipt,
   usePublicClient,
+  useWriteContract
 } from "wagmi";
 
 // Import ABIs
@@ -14,7 +13,7 @@ import { ProviderContractAbi } from "@/abis/ProviderContract";
 const factoryAddressEnv = process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
 if (!factoryAddressEnv) {
   throw new Error(
-    "NEXT_PUBLIC_FACTORY_ADDRESS environment variable is not set."
+    "NEXT_PUBLIC_FACTORY_ADDRESS environment variable is required but not set."
   );
 }
 export const FACTORY_ADDRESS = factoryAddressEnv as `0x${string}`;

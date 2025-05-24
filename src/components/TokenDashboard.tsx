@@ -136,6 +136,8 @@ export default function TokenDashboard({
                     blockExplorerUrl={blockExplorerUrl || null}
                     activeTab={activeTab}
                     tokenBalance={tokenInfo.balance}
+                    accumulatedFees={bondingCurveInfo.accumulatedFees}
+                    maxSellableAmount={bondingCurveInfo.maxSellableAmount}
                     handleBuyAmountChange={handleBuyAmountChange}
                     handleSellAmountChange={handleSellAmountChange}
                     approveBuy={approveBuy}

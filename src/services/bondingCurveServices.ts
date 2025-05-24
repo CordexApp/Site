@@ -1,7 +1,7 @@
 import {
-    formatEther,
-    PublicClient,
-    TransactionReceipt
+  formatEther,
+  PublicClient,
+  TransactionReceipt
 } from "viem";
 import { usePublicClient, useWriteContract } from "wagmi";
 
@@ -14,7 +14,7 @@ import { ERC20Abi } from "@/abis/ERC20";
 const factoryAddressEnv = process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
 if (!factoryAddressEnv) {
   throw new Error(
-    "NEXT_PUBLIC_FACTORY_ADDRESS environment variable is not set."
+    "NEXT_PUBLIC_FACTORY_ADDRESS environment variable is required but not set."
   );
 }
 export const FACTORY_ADDRESS = factoryAddressEnv as `0x${string}`;
@@ -439,6 +439,59 @@ export const getSellPayoutEstimate = async (
     return payout as bigint;
   } catch (err) {
     console.error("[bondingCurveServices] getSellPayoutEstimate error:", err);
+    return BigInt(0);
+  }
+};
+
+export const getAccumulatedFees = async (
+  publicClient: ReturnType<typeof usePublicClient> | undefined,
+  bondingCurveAddress: `0x${string}`
+): Promise<bigint> => {
+  try {
+    if (!publicClient) return BigInt(0);
+    const fees = await publicClient.readContract({
+      address: bondingCurveAddress,
+      abi: bondingCurveAbi,
+      functionName: "accumulatedFees",
+    });
+    return fees as bigint;
+  } catch (err) {
+    console.error("[bondingCurveServices] getAccumulatedFees error:", err);
+    return BigInt(0);
+  }
+};
+
+export const getMaxSellableAmount = async (
+  publicClient: ReturnType<typeof usePublicClient> | undefined,
+  bondingCurveAddress: `0x${string}`,
+  availableLiquidity: bigint,
+  userBalance: bigint
+): Promise<bigint> => {
+  try {
+    if (!publicClient) {
+      console.error("[getMaxSellableAmount] Public client not available");
+      return BigInt(0);
+    }
+
+    console.log("[getMaxSellableAmount] Calling smart contract getMaxSellableAmount function");
+    
+    // Use the smart contract's optimized getMaxSellableAmount function
+    const maxSellable = await publicClient.readContract({
+      address: bondingCurveAddress,
+      abi: bondingCurveAbi,
+      functionName: "getMaxSellableAmount",
+    });
+    
+    const result = maxSellable as bigint;
+    console.log(`[getMaxSellableAmount] Smart contract returned: ${result.toString()}`);
+    
+    // Ensure we don't exceed the user's balance
+    const finalResult = result > userBalance ? userBalance : result;
+    console.log(`[getMaxSellableAmount] Final result (capped by user balance): ${finalResult.toString()}`);
+    
+    return finalResult;
+  } catch (err) {
+    console.error("[bondingCurveServices] getMaxSellableAmount error:", err);
     return BigInt(0);
   }
 };

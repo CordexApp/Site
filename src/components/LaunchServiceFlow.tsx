@@ -20,9 +20,9 @@ import { TypedText } from './ui/TypedText';
 // Get factory address from environment variables
 const factoryAddressEnv = process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
 if (!factoryAddressEnv) {
-  console.error("NEXT_PUBLIC_FACTORY_ADDRESS environment variable is not set. Using fallback address.");
+  throw new Error("NEXT_PUBLIC_FACTORY_ADDRESS environment variable is required but not set.");
 }
-const CONTRACT_FACTORY_ADDRESS = factoryAddressEnv || '0x0000000000000000000000000000000000000000';
+const CONTRACT_FACTORY_ADDRESS = factoryAddressEnv;
 
 type DeploymentStep = 'input' | 'confirming' | 'deploying-service' | 'approving-tokens' | 'deploying-curve' | 'registering-service' | 'complete';
 

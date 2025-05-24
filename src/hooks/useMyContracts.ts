@@ -17,10 +17,10 @@ import {
 const factoryAddressEnv = process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
 if (!factoryAddressEnv) {
   throw new Error(
-    "NEXT_PUBLIC_FACTORY_ADDRESS environment variable is not set."
+    "NEXT_PUBLIC_FACTORY_ADDRESS environment variable is required but not set."
   );
 }
-export const factoryAddress = factoryAddressEnv as `0x${string}`;
+const FACTORY_ADDRESS = factoryAddressEnv as `0x${string}`;
 
 // Factory ABI (partial)
 const factoryAbi = [
@@ -201,13 +201,13 @@ export default function useMyContracts(): UseMyContractsReturn {
     allowFailure: true,
     contracts: [
       {
-        address: factoryAddress,
+        address: FACTORY_ADDRESS,
         abi: factoryAbi,
         functionName: "getProviderTokens",
         args: address ? [address] : undefined,
       },
       {
-        address: factoryAddress,
+        address: FACTORY_ADDRESS,
         abi: factoryAbi,
         functionName: "getBondingCurveContracts",
         args: address ? [address] : undefined,
