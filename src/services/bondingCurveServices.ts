@@ -1,7 +1,7 @@
 import {
-  formatEther,
-  PublicClient,
-  TransactionReceipt
+    formatEther,
+    PublicClient,
+    TransactionReceipt
 } from "viem";
 import { usePublicClient, useWriteContract } from "wagmi";
 

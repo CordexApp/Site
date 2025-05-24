@@ -11,7 +11,7 @@ import {
     ISeriesApi,
     UTCTimestamp
 } from "lightweight-charts";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface PriceChartProps {
   data: OHLCVCandle[];
@@ -25,17 +25,19 @@ export default function PriceChart({
   data,
   timeframe,
   onTimeframeChange,
-  availableTimeframes = TIMEFRAME_ORDER,
+  availableTimeframes = [...TIMEFRAME_ORDER],
   symbol = "Token",
 }: PriceChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const lastAppliedDataRef = useRef<CandlestickData[]>([]);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [lastTimeframeChange, setLastTimeframeChange] = useState<number>(0);
 
-  // Set up chart
+  // Set up chart only once - no longer depends on timeframe
   useEffect(() => {
-    if (!chartContainerRef.current) return;
+    if (!chartContainerRef.current || chartRef.current) return;
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
@@ -54,7 +56,7 @@ export default function PriceChart({
       timeScale: {
         borderColor: "#334155",
         timeVisible: true,
-        secondsVisible: timeframe === "1m" || timeframe === "5m",
+        secondsVisible: false, // Will be updated dynamically
       },
       rightPriceScale: {
         borderColor: "#334155",
@@ -87,17 +89,40 @@ export default function PriceChart({
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      chartRef.current?.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+        seriesRef.current = null;
+      }
     };
+  }, []); // Only create chart once
+
+  // Update timeScale options when timeframe changes
+  useEffect(() => {
+    if (chartRef.current) {
+      chartRef.current.applyOptions({
+        timeScale: {
+          borderColor: "#334155",
+          timeVisible: true,
+          secondsVisible: timeframe === "1m" || timeframe === "5m",
+        },
+      });
+    }
   }, [timeframe]);
 
   // Update chart data when data prop changes
   useEffect(() => {
     const series = seriesRef.current;
     const chart = chartRef.current;
-    if (!series || !chart || !data) return;
+    if (!series || !chart) return;
+
+    // Handle empty data case
+    if (!data || data.length === 0) {
+      series.setData([]);
+      lastAppliedDataRef.current = [];
+      setIsTransitioning(false);
+      return;
+    }
 
     const newChartData: CandlestickData[] = data.map((candle) => ({
       time: candle.time as UTCTimestamp,
@@ -107,21 +132,16 @@ export default function PriceChart({
       close: parseFloat(candle.close),
     }));
 
-    if (newChartData.length === 0) {
-      series.setData([]);
-      lastAppliedDataRef.current = [];
-      return;
-    }
-
     const lastAppliedData = lastAppliedDataRef.current;
 
     // Check if this is likely an incremental update (polling)
-    // Condition: new data has 1+ items, last applied has items, last new candle time > last applied candle time
     const isIncrementalUpdate =
       newChartData.length > 0 &&
       lastAppliedData.length > 0 &&
       newChartData[newChartData.length - 1].time >
-        lastAppliedData[lastAppliedData.length - 1].time;
+        lastAppliedData[lastAppliedData.length - 1].time &&
+      // Additional check: if the new data contains most of the previous data, it's incremental
+      newChartData.length >= lastAppliedData.length;
 
     if (isIncrementalUpdate) {
       // Check if the update is just appending or replacing the last candle
@@ -140,20 +160,51 @@ export default function PriceChart({
         lastAppliedDataRef.current.push(newLastCandle);
         chart.timeScale().scrollToRealTime();
       }
+      setIsTransitioning(false);
     } else {
-      // Otherwise, assume it's a full data replacement (initial load, timeframe change)
+      // Full data replacement (timeframe change or initial load)
       console.log(
         "[PriceChart] Setting full data (length: " + newChartData.length + ")"
       );
-      series.setData(newChartData);
-      lastAppliedDataRef.current = newChartData;
-      chart.timeScale().fitContent();
+      
+      // Add transition effect for timeframe changes
+      if (lastAppliedData.length > 0) {
+        setIsTransitioning(true);
+        // Small delay to create smooth transition
+        setTimeout(() => {
+          series.setData(newChartData);
+          lastAppliedDataRef.current = newChartData;
+          chart.timeScale().fitContent();
+          setIsTransitioning(false);
+        }, 50);
+      } else {
+        // Initial load - no transition needed
+        series.setData(newChartData);
+        lastAppliedDataRef.current = newChartData;
+        chart.timeScale().fitContent();
+        setIsTransitioning(false);
+      }
     }
   }, [data]);
 
   // Format display text for timeframe
   const formatTimeframe = (tf: string) => {
     return TIMEFRAME_LABELS[tf] || tf;
+  };
+
+  // Enhanced timeframe change handler with visual feedback and cooldown
+  const handleTimeframeClick = (tf: string) => {
+    if (tf === timeframe) return; // Don't do anything if same timeframe
+    
+    // Prevent rapid clicking (debounce)
+    const now = Date.now();
+    if (now - lastTimeframeChange < 200) return; // 200ms cooldown
+    
+    setLastTimeframeChange(now);
+    setIsTransitioning(true);
+    if (onTimeframeChange) {
+      onTimeframeChange(tf);
+    }
   };
 
   return (
@@ -165,11 +216,20 @@ export default function PriceChart({
           {availableTimeframes.map((tf) => (
             <button
               key={tf}
-              onClick={() => onTimeframeChange && onTimeframeChange(tf)}
-              className={`px-2 py-1 text-xs hover:border-white cursor-pointer ${
+              onClick={() => handleTimeframeClick(tf)}
+              disabled={isTransitioning}
+              className={`px-2 py-1 text-xs hover:border-white cursor-pointer transition-all duration-200 ${
                 timeframe === tf
                   ? "border-1 border-white text-white"
                   : "border-1 border-gray-700 text-white"
+              } ${
+                isTransitioning && tf === timeframe
+                  ? "opacity-75 animate-pulse"
+                  : ""
+              } ${
+                isTransitioning
+                  ? "cursor-not-allowed opacity-50"
+                  : ""
               }`}
             >
               {formatTimeframe(tf)}
@@ -178,10 +238,22 @@ export default function PriceChart({
         </div>
       </div>
 
-      <div ref={chartContainerRef} className="relative h-[400px] w-full">
-        {!data.length && (
+      <div 
+        ref={chartContainerRef} 
+        className={`relative h-[400px] w-full transition-opacity duration-200 ${
+          isTransitioning ? "opacity-90" : "opacity-100"
+        }`}
+      >
+        {!data.length && !isTransitioning && (
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-gray-400">No trading data available</span>
+          </div>
+        )}
+        {isTransitioning && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="bg-black bg-opacity-50 px-3 py-1 rounded text-xs text-white">
+              Loading {formatTimeframe(timeframe)}...
+            </div>
           </div>
         )}
       </div>

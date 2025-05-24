@@ -44,6 +44,7 @@ export default function TokenDashboard({
     handleTimeframeChange,
     clearSuccessMessage,
     clearErrorMessage,
+    calculateMaxBuyableAmount,
   } = useTokenDashboard(providerContractAddress, {
     initialCoinContractAddress: coinContractAddress,
   });
@@ -136,8 +137,10 @@ export default function TokenDashboard({
                     blockExplorerUrl={blockExplorerUrl || null}
                     activeTab={activeTab}
                     tokenBalance={tokenInfo.balance}
+                    cordexBalance={tokenInfo.cordexBalance}
                     accumulatedFees={bondingCurveInfo.accumulatedFees}
                     maxSellableAmount={bondingCurveInfo.maxSellableAmount}
+                    maxBuyableAmount={bondingCurveInfo.maxBuyableAmount}
                     handleBuyAmountChange={handleBuyAmountChange}
                     handleSellAmountChange={handleSellAmountChange}
                     approveBuy={approveBuy}
@@ -146,6 +149,7 @@ export default function TokenDashboard({
                     executeSell={executeSell}
                     setActiveTab={setActiveTab}
                     clearSuccessMessage={clearSuccessMessage}
+                    onCalculateMaxBuyable={calculateMaxBuyableAmount}
                   />
                 </div>
               )}

@@ -29,8 +29,10 @@ interface TokenTradingProps {
   blockExplorerUrl: string | null;
   activeTab: "buy" | "sell";
   tokenBalance: string | null | undefined;
+  cordexBalance: string | null | undefined;
   accumulatedFees: string | null | undefined;
   maxSellableAmount: string | null | undefined;
+  maxBuyableAmount: string | null | undefined;
   handleBuyAmountChange: (amount: string) => void;
   handleSellAmountChange: (amount: string) => void;
   approveBuy: () => void;
@@ -39,6 +41,7 @@ interface TokenTradingProps {
   executeSell: () => void;
   setActiveTab: (tab: "buy" | "sell") => void;
   clearSuccessMessage: () => void;
+  onCalculateMaxBuyable?: () => Promise<string>;
 }
 
 const TokenTrading: React.FC<TokenTradingProps> = ({
@@ -50,8 +53,10 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
   blockExplorerUrl,
   activeTab,
   tokenBalance,
+  cordexBalance,
   accumulatedFees,
   maxSellableAmount,
+  maxBuyableAmount,
   handleBuyAmountChange,
   handleSellAmountChange,
   approveBuy,
@@ -60,6 +65,7 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
   executeSell,
   setActiveTab,
   clearSuccessMessage,
+  onCalculateMaxBuyable,
 }) => {
   // Calculate if the user has sufficient balance to sell
   const hasInsufficientTokenBalance = () => {
@@ -72,6 +78,41 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
     if (!maxSellableAmount || !sellState.amount) return false;
     // Check if user's sell amount exceeds what would drain all liquidity
     return Number(sellState.amount) > Number(maxSellableAmount);
+  };
+
+  // Handle max button click - set to the smaller of user balance or max sellable amount
+  const handleMaxSell = () => {
+    if (!tokenBalance && !maxSellableAmount) return;
+    
+    const userBalance = Number(tokenBalance || "0");
+    const maxSellable = Number(maxSellableAmount || "0");
+    
+    // Use the smaller of the two values
+    const maxAmount = Math.min(userBalance, maxSellable);
+    
+    if (maxAmount > 0) {
+      handleSellAmountChange(maxAmount.toString());
+    }
+  };
+
+  // Handle max buy button click - calculate and set the maximum buyable amount
+  const handleMaxBuy = async () => {
+    if (onCalculateMaxBuyable) {
+      try {
+        const maxAmount = await onCalculateMaxBuyable();
+        if (maxAmount && Number(maxAmount) > 0) {
+          handleBuyAmountChange(maxAmount);
+        }
+      } catch (err) {
+        console.error("[handleMaxBuy] Error calculating max buyable amount:", err);
+      }
+    } else if (maxBuyableAmount) {
+      // Fallback to existing value if no calculator provided
+      const maxBuyable = Number(maxBuyableAmount || "0");
+      if (maxBuyable > 0) {
+        handleBuyAmountChange(maxBuyable.toString());
+      }
+    }
   };
 
   return (
@@ -108,17 +149,17 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
         </div>
       )}
 
+      {/* ADDED: CORDEX balance display */}
+      {cordexBalance !== null && cordexBalance !== undefined && (
+        <div className="text-sm text-gray-400 mb-3">
+          your CORDEX: {Number(cordexBalance).toFixed(4)} CORDEX
+        </div>
+      )}
+
       {/* ADDED: Liquidity and limit information */}
       {accumulatedFees !== null && accumulatedFees !== undefined && (
         <div className="text-sm text-gray-400 mb-3">
           available liquidity: {Number(accumulatedFees).toFixed(4)} CORDEX
-        </div>
-      )}
-
-      {maxSellableAmount !== null && maxSellableAmount !== undefined && (
-        <div className="text-sm text-gray-400 mb-3">
-          total sellable until liquidity exhausted: {Number(maxSellableAmount).toFixed(4)}{" "}
-          {tokenSymbol || "tokens"}
         </div>
       )}
 
@@ -152,14 +193,26 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
               <InputLabel>
                 amount of {tokenSymbol || "tokens"} to buy
               </InputLabel>
-              <div className="flex items-center space-x-2">
-                <NumericInput
-                  value={buyState.amount}
-                  onChange={(e) => handleBuyAmountChange(e.target.value)}
-                  placeholder="0.0"
-                  disabled={buyState.isProcessing || buyState.isApproving}
-                  allowDecimal={true}
-                />
+              <div className="flex items-center space-x-2 w-full">
+                <div className="flex-1 relative">
+                  <NumericInput
+                    value={buyState.amount}
+                    onChange={(e) => handleBuyAmountChange(e.target.value)}
+                    placeholder="0.0"
+                    disabled={buyState.isProcessing || buyState.isApproving}
+                    allowDecimal={true}
+                  />
+                  {/* Max button */}
+                  {(cordexBalance || maxBuyableAmount) && (
+                    <button
+                      onClick={handleMaxBuy}
+                      disabled={buyState.isProcessing || buyState.isApproving}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-400 hover:text-white disabled:text-gray-600 disabled:hover:text-gray-600 px-2 py-1 rounded border border-gray-600 hover:border-gray-400 disabled:border-gray-700"
+                    >
+                      max
+                    </button>
+                  )}
+                </div>
                 <span className="text-gray-400 text-sm whitespace-nowrap">
                   {tokenSymbol || "tokens"}
                 </span>
@@ -208,13 +261,25 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
             <div>
               <InputLabel>amount of {tokenSymbol || "tokens"} to sell</InputLabel>
               <div className="flex items-center space-x-2 w-full">
-                <NumericInput
-                  value={sellState.amount}
-                  onChange={(e) => handleSellAmountChange(e.target.value)}
-                  placeholder="0.0"
-                  disabled={sellState.isProcessing || sellState.isApproving}
-                  allowDecimal={true}
-                />
+                <div className="flex-1 relative">
+                  <NumericInput
+                    value={sellState.amount}
+                    onChange={(e) => handleSellAmountChange(e.target.value)}
+                    placeholder="0.0"
+                    disabled={sellState.isProcessing || sellState.isApproving}
+                    allowDecimal={true}
+                  />
+                  {/* Max button */}
+                  {(tokenBalance || maxSellableAmount) && (
+                    <button
+                      onClick={handleMaxSell}
+                      disabled={sellState.isProcessing || sellState.isApproving}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-400 hover:text-white disabled:text-gray-600 disabled:hover:text-gray-600 px-2 py-1 rounded border border-gray-600 hover:border-gray-400 disabled:border-gray-700"
+                    >
+                      max
+                    </button>
+                  )}
+                </div>
                 <span className="text-gray-400 text-sm whitespace-nowrap">
                   {tokenSymbol || "tokens"}
                 </span>
@@ -230,17 +295,15 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
               </div>
             )}
 
-            {hasInsufficientTokenBalance() && (
+            {hasInsufficientTokenBalance() ? (
               <p className="text-cordex-red text-sm">
                 insufficient token balance
               </p>
-            )}
-
-            {exceedsLiquidityLimit() && (
+            ) : exceedsLiquidityLimit() ? (
               <p className="text-cordex-red text-sm">
-                sell amount would exceed available liquidity in bonding curve
+                not enough liquidity
               </p>
-            )}
+            ) : null}
 
             {sellState.hasAllowance ? (
               <PrimaryButton

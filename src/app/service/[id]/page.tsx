@@ -1,9 +1,9 @@
 import ServiceLoader from "./ServiceLoader";
 
 interface ServicePageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 // Make the component async and await params

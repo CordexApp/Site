@@ -1,41 +1,42 @@
 import { ERC20Abi } from "@/abis/ERC20";
 import { TIMEFRAME_ORDER } from "@/config";
 import {
-    approveTokens,
-    buyTokens,
-    calculatePrice,
-    findBondingCurveForProviderToken,
-    getAccumulatedFees,
-    getCordexTokenAddress,
-    getCurrentPrice,
-    getMaxSellableAmount,
-    getSellPayoutEstimate,
-    getTokenAllowance,
-    getTokenSupply,
-    sellTokens,
+  approveTokens,
+  buyTokens,
+  calculatePrice,
+  findBondingCurveForProviderToken,
+  getAccumulatedFees,
+  getCordexTokenAddress,
+  getCurrentPrice,
+  getMaxSellableAmount,
+  getSellPayoutEstimate,
+  getTokenAllowance,
+  getTokenSupply,
+  sellTokens,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
-import { getServiceByContractAddress } from "@/services/servicesService";
 import {
-    getAvailableTimeframes,
-    getOHLCVData,
-    OHLCVCandle,
+  getAvailableTimeframesFast,
+  getCoinContractAddressFast,
+  getOHLCVDataBulk,
+  getOHLCVDataFast,
+  OHLCVCandle
 } from "@/services/tradingDataService";
 import { useEffect, useRef, useState } from "react";
 import {
-    Abi,
-    decodeEventLog,
-    formatEther,
-    Log,
-    maxUint256,
-    parseAbiItem,
-    parseEther,
+  Abi,
+  decodeEventLog,
+  formatEther,
+  Log,
+  maxUint256,
+  parseAbiItem,
+  parseEther,
 } from "viem";
 import {
-    useAccount,
-    usePublicClient,
-    useWatchContractEvent,
-    useWriteContract,
+  useAccount,
+  usePublicClient,
+  useWatchContractEvent,
+  useWriteContract,
 } from "wagmi";
 
 // Types (Ensure these are defined or imported correctly)
@@ -44,6 +45,7 @@ export interface TokenInfo {
   name: string | null;
   symbol: string | null;
   balance: string | null;
+  cordexBalance: string | null;
   totalSupply: string | null;
 }
 
@@ -52,6 +54,7 @@ export interface BondingCurveInfo {
   tokenSupply: string;
   accumulatedFees: string;
   maxSellableAmount: string;
+  maxBuyableAmount: string;
   cordexTokenAddress: `0x${string}` | null;
 }
 
@@ -87,6 +90,7 @@ export function useTokenDashboard(
     name: null,
     symbol: null,
     balance: null,
+    cordexBalance: null,
     totalSupply: null,
   });
   const [bondingCurveInfo, setBondingCurveInfo] = useState<BondingCurveInfo>({
@@ -94,8 +98,13 @@ export function useTokenDashboard(
     tokenSupply: "0",
     accumulatedFees: "0",
     maxSellableAmount: "0",
+    maxBuyableAmount: "0",
     cordexTokenAddress: null,
   });
+  
+  // Separate state for max buyable amount calculation
+  const [isCalculatingMaxBuyable, setIsCalculatingMaxBuyable] = useState(false);
+  const maxBuyableCache = useRef<{ cordexBalance: string; amount: string; timestamp: number } | null>(null);
   const [buyState, setBuyState] = useState<TradingState>({
     amount: "",
     estimatedCost: "0",
@@ -116,15 +125,24 @@ export function useTokenDashboard(
 
   // Chart state
   const [chartData, setChartData] = useState<OHLCVCandle[]>([]);
-  const [chartTimeframe, setChartTimeframe] = useState<string>("1h");
+  const [chartTimeframe, setChartTimeframe] = useState<string>("1m");
   const [availableTimeframes, setAvailableTimeframes] = useState<string[]>(
-    TIMEFRAME_ORDER
+    [...TIMEFRAME_ORDER]
   );
   
-  // Add caching for chart data
+  // Add caching for chart data with improved TTL strategy
   const chartDataCache = useRef<Record<string, { data: OHLCVCandle[], timestamp: number }>>({});
-  const CHART_CACHE_TTL = 60000; // 60 seconds cache
+  const CHART_CACHE_TTL_MAP: Record<string, number> = {
+    '1m': 30000,   // 30 seconds for 1-minute data
+    '5m': 60000,   // 1 minute for 5-minute data  
+    '15m': 180000, // 3 minutes for 15-minute data
+    '1h': 300000,  // 5 minutes for 1-hour data
+    '4h': 600000,  // 10 minutes for 4-hour data
+    '1d': 1800000, // 30 minutes for daily data
+  };
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const bulkDataCache = useRef<Record<string, OHLCVCandle[]> | null>(null);
+  const bulkDataTimestamp = useRef<number>(0);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<"buy" | "sell">("buy");
@@ -142,6 +160,98 @@ export function useTokenDashboard(
 
   // Function to clear error message
   const clearErrorMessage = () => setError(null);
+
+  // Function to calculate max buyable amount (called only when needed)
+  const calculateMaxBuyableAmount = async (): Promise<string> => {
+    if (!publicClient || !bondingCurveAddress || !walletAddress || !bondingCurveInfo.cordexTokenAddress) {
+      return "0";
+    }
+
+    try {
+      setIsCalculatingMaxBuyable(true);
+      
+      // Get user's CORDEX balance
+      const cordexBalanceBigInt = (await publicClient.readContract({
+        address: bondingCurveInfo.cordexTokenAddress,
+        abi: ERC20Abi as Abi,
+        functionName: "balanceOf",
+        args: [walletAddress],
+      })) as bigint;
+
+      const cordexBalanceFormatted = formatEther(cordexBalanceBigInt);
+      
+      // Check cache
+      const cacheKey = cordexBalanceFormatted;
+      if (maxBuyableCache.current && 
+          maxBuyableCache.current.cordexBalance === cacheKey &&
+          Date.now() - maxBuyableCache.current.timestamp < 30000) { // 30 second cache
+        console.log("[calculateMaxBuyableAmount] Using cached result");
+        return maxBuyableCache.current.amount;
+      }
+
+      // Update CORDEX balance in tokenInfo
+      setTokenInfo((prev) => {
+        if (prev.cordexBalance !== cordexBalanceFormatted) {
+          return { ...prev, cordexBalance: cordexBalanceFormatted };
+        }
+        return prev;
+      });
+
+      let maxBuyable = BigInt(0);
+      
+      if (cordexBalanceBigInt > BigInt(0)) {
+        // Get current supply
+        const supply = await getTokenSupply(publicClient, bondingCurveAddress);
+        
+        if (supply > BigInt(0)) {
+          // Use binary search to find maximum buyable amount
+          let low = BigInt(0);
+          let high = supply; // Can't buy more tokens than available in the curve
+          const precision = parseEther("0.001"); // Reduced precision for faster calculation
+          
+          while (high > low + precision && high > BigInt(0)) {
+            const mid = (low + high) / BigInt(2);
+            
+            if (mid == BigInt(0)) {
+              low = mid;
+              continue;
+            }
+            
+            try {
+              const cost = await calculatePrice(publicClient, bondingCurveAddress, mid);
+              
+              if (cost <= cordexBalanceBigInt) {
+                maxBuyable = mid;
+                low = mid;
+              } else {
+                high = mid;
+              }
+            } catch (err) {
+              console.error("[calculateMaxBuyableAmount] Error in binary search:", err);
+              high = mid;
+            }
+          }
+        }
+      }
+
+      const result = formatEther(maxBuyable);
+      
+      // Cache the result
+      maxBuyableCache.current = {
+        cordexBalance: cordexBalanceFormatted,
+        amount: result,
+        timestamp: Date.now()
+      };
+      
+      console.log("[calculateMaxBuyableAmount] Calculated max buyable:", result);
+      return result;
+    } catch (err) {
+      console.error("[calculateMaxBuyableAmount] Error:", err);
+      return "0";
+    } finally {
+      setIsCalculatingMaxBuyable(false);
+    }
+  };
 
   // Function to check and update token allowances
   const checkAndUpdateAllowances = async () => {
@@ -234,6 +344,31 @@ export function useTokenDashboard(
     } catch (err) {
       console.error("[TokenDashboard] Error fetching token balance:", err);
       // Don't set main error state for just a balance refresh failure
+    }
+  };
+
+  // Function to refresh CORDEX balance
+  const refreshCordexBalance = async () => {
+    if (!publicClient || !walletAddress || !bondingCurveInfo.cordexTokenAddress) {
+      return;
+    }
+    try {
+      const balanceBigInt = (await publicClient.readContract({
+        address: bondingCurveInfo.cordexTokenAddress,
+        abi: ERC20Abi as Abi,
+        functionName: "balanceOf",
+        args: [walletAddress],
+      })) as bigint;
+      const newCordexBalance = formatEther(balanceBigInt);
+      console.log(`[TokenDashboard] Refreshed CORDEX balance: ${newCordexBalance}`);
+      setTokenInfo((prev) => {
+        if (prev.cordexBalance !== newCordexBalance) {
+          return { ...prev, cordexBalance: newCordexBalance };
+        }
+        return prev;
+      });
+    } catch (err) {
+      console.error("[TokenDashboard] Error fetching CORDEX balance:", err);
     }
   };
 
@@ -375,6 +510,7 @@ export function useTokenDashboard(
         tokenSupply: formatEther(supply),
         accumulatedFees: formatEther(fees),
         maxSellableAmount: formatEther(maxSellable),
+        maxBuyableAmount: bondingCurveInfo.maxBuyableAmount || "0", // Keep existing value, don't recalculate here
         cordexTokenAddress: cordexAddress,
       };
       
@@ -399,26 +535,49 @@ export function useTokenDashboard(
     }
   };
 
-  // Function to fetch chart data
-  const fetchChartData = async (forceRefresh = false) => {
+  // Helper function to invalidate all chart caches
+  const invalidateAllChartCaches = () => {
+    console.log("[useTokenDashboard] Invalidating all chart caches");
+    chartDataCache.current = {};
+    bulkDataCache.current = null;
+    bulkDataTimestamp.current = 0;
+  };
+
+  // Function to fetch chart data with bulk prefetching
+  const fetchChartData = async (forceRefresh = false, useBulkPrefetch = false) => {
     if (!bondingCurveAddress) return;
 
     try {
       // Check cache first (unless force refresh)
       const cacheKey = `${bondingCurveAddress}-${chartTimeframe}`;
       const cachedData = chartDataCache.current[cacheKey];
+      const cacheAge = cachedData ? Date.now() - cachedData.timestamp : Infinity;
+      const cacheTTL = CHART_CACHE_TTL_MAP[chartTimeframe] || 60000;
       
-      if (!forceRefresh && cachedData && (Date.now() - cachedData.timestamp) < CHART_CACHE_TTL) {
-        console.log(`[useTokenDashboard] Using cached data for ${chartTimeframe}`);
+      if (!forceRefresh && cachedData && cacheAge < cacheTTL) {
+        console.log(`[useTokenDashboard] Using cached data for ${chartTimeframe} (age: ${Math.round(cacheAge/1000)}s)`);
         setChartData(cachedData.data);
         return;
       }
 
-      console.log(`[useTokenDashboard] Fetching fresh data for ${chartTimeframe}`);
+      // Check bulk cache first
+      const bulkCacheAge = Date.now() - bulkDataTimestamp.current;
+      if (!forceRefresh && bulkDataCache.current && bulkCacheAge < 60000 && bulkDataCache.current[chartTimeframe]) {
+        console.log(`[useTokenDashboard] Using bulk cached data for ${chartTimeframe}`);
+        const bulkData = bulkDataCache.current[chartTimeframe];
+        chartDataCache.current[cacheKey] = {
+          data: bulkData,
+          timestamp: Date.now()
+        };
+        setChartData(bulkData);
+        return;
+      }
+
+      console.log(`[useTokenDashboard] Fetching fresh data for ${chartTimeframe} (bulk: ${useBulkPrefetch})`);
 
       // Only fetch available timeframes if we don't have them yet or they're empty
-      if (availableTimeframes.length === 0 || availableTimeframes === TIMEFRAME_ORDER) {
-        const timeframes = await getAvailableTimeframes(bondingCurveAddress);
+      if (availableTimeframes.length === 0 || JSON.stringify(availableTimeframes) === JSON.stringify(TIMEFRAME_ORDER)) {
+        const timeframes = await getAvailableTimeframesFast(bondingCurveAddress);
         if (timeframes.length > 0) {
           setAvailableTimeframes(timeframes);
 
@@ -430,8 +589,44 @@ export function useTokenDashboard(
         }
       }
 
-      // Fetch the OHLCV data
-      const response = await getOHLCVData(
+             // Use bulk prefetch for initial load or when specifically requested
+       if (useBulkPrefetch || !bulkDataCache.current) {
+         console.log(`[useTokenDashboard] Using bulk prefetch for multiple timeframes`);
+         try {
+           const bulkResponse = await getOHLCVDataBulk(bondingCurveAddress, availableTimeframes, 1000);
+           
+           // Cache all timeframes from bulk response
+           bulkDataCache.current = {};
+           Object.entries(bulkResponse).forEach(([timeframe, responseData]: [string, any]) => {
+             if (responseData.candles && responseData.candles.length > 0) {
+               bulkDataCache.current![timeframe] = responseData.candles;
+               
+               // Also update individual cache
+               const individualCacheKey = `${bondingCurveAddress}-${timeframe}`;
+               chartDataCache.current[individualCacheKey] = {
+                 data: responseData.candles,
+                 timestamp: Date.now()
+               };
+             }
+           });
+           bulkDataTimestamp.current = Date.now();
+           
+           // Set data for current timeframe
+           if (bulkDataCache.current[chartTimeframe]) {
+             setChartData(bulkDataCache.current[chartTimeframe]);
+           } else {
+             setChartData([]);
+           }
+           
+           console.log(`[useTokenDashboard] Bulk prefetch completed, cached ${Object.keys(bulkDataCache.current).length} timeframes`);
+           return;
+         } catch (bulkError) {
+           console.warn(`[useTokenDashboard] Bulk prefetch failed, falling back to single request:`, bulkError);
+         }
+       }
+
+      // Fallback to single timeframe fetch
+      const response = await getOHLCVDataFast(
         bondingCurveAddress,
         chartTimeframe,
         1000 // Limit to 1000 candles
@@ -453,28 +648,47 @@ export function useTokenDashboard(
     }
   };
 
-  // Handle timeframe change with debouncing
+  // Handle timeframe change with enhanced caching and smooth transitions
   const handleTimeframeChange = (timeframe: string) => {
     // Clear any pending fetch
     if (fetchTimeoutRef.current) {
       clearTimeout(fetchTimeoutRef.current);
     }
     
+    // Don't do anything if it's the same timeframe
+    if (chartTimeframe === timeframe) return;
+    
+    console.log(`[useTokenDashboard] Switching from ${chartTimeframe} to ${timeframe}`);
     setChartTimeframe(timeframe);
     
-    // Check if we have cached data for this timeframe
+    // Check multiple cache sources for this timeframe
     const cacheKey = `${bondingCurveAddress}-${timeframe}`;
     const cachedData = chartDataCache.current[cacheKey];
+    const bulkCachedData = bulkDataCache.current?.[timeframe];
     
-    if (cachedData && (Date.now() - cachedData.timestamp) < CHART_CACHE_TTL) {
+    // Try individual cache first
+    if (cachedData && (Date.now() - cachedData.timestamp) < CHART_CACHE_TTL_MAP[timeframe]) {
       console.log(`[useTokenDashboard] Instant switch to cached ${timeframe} data`);
       setChartData(cachedData.data);
-    } else {
-      // Debounce the API call for non-cached data
-      fetchTimeoutRef.current = setTimeout(() => {
-        fetchChartData(false);
-      }, 100); // 100ms debounce
+      return;
     }
+    
+    // Try bulk cache as fallback
+    if (bulkCachedData && (Date.now() - bulkDataTimestamp.current) < 120000) { // 2 minute TTL for bulk cache
+      console.log(`[useTokenDashboard] Using bulk cached data for ${timeframe}`);
+      // Update individual cache with bulk data
+      chartDataCache.current[cacheKey] = {
+        data: bulkCachedData,
+        timestamp: Date.now()
+      };
+      setChartData(bulkCachedData);
+      return;
+    }
+    
+    // No cached data available - fetch fresh data immediately
+    console.log(`[useTokenDashboard] No cached data for ${timeframe}, fetching fresh data immediately`);
+    // Use immediate execution for the fastest possible switch
+    fetchChartData(false, false); // Don't use bulk prefetch for timeframe switches
   };
 
   // Define the event ABI item string for parsing
@@ -515,15 +729,14 @@ export function useTokenDashboard(
         let tokenAddress: `0x${string}` | null | undefined = initialCoinContractAddress;
 
         if (!tokenAddress) {
-          // Fallback to fetching if not provided
-          console.log("[useTokenDashboard] initialCoinContractAddress not provided, fetching service for it via providerContractAddress:", providerContractAddress);
-          const service = await getServiceByContractAddress(providerContractAddress);
-          console.log("[useTokenDashboard] Service from backend:", service);
+          // Fallback to fetching directly from blockchain (bypassing database)
+          console.log("[useTokenDashboard] initialCoinContractAddress not provided, fetching token address directly from blockchain for providerContractAddress:", providerContractAddress);
+          tokenAddress = await getCoinContractAddressFast(publicClient, providerContractAddress);
+          console.log("[useTokenDashboard] Token address from blockchain:", tokenAddress);
 
-          if (!service || !service.coin_contract_address) {
-            throw new Error("Token information not available from fetched service");
+          if (!tokenAddress) {
+            throw new Error("Token address could not be determined from blockchain");
           }
-          tokenAddress = service.coin_contract_address as `0x${string}`;
         } else {
           console.log("[useTokenDashboard] Using provided initialCoinContractAddress:", tokenAddress);
         }
@@ -556,6 +769,7 @@ export function useTokenDashboard(
           name: tokenName,
           symbol: tokenSymbol,
           balance: null, // Will be updated separately if wallet is connected
+          cordexBalance: null, // Will be updated separately if wallet is connected
           totalSupply: totalSupply, // Add total supply
         };
         setTokenInfo(newTokenInfo);
@@ -627,7 +841,7 @@ export function useTokenDashboard(
     };
   }, [providerContractAddress, publicClient, walletAddress]);
 
-  // Fetch chart data when bonding curve address or timeframe changes
+  // Fetch chart data when bonding curve address changes or initial load
   useEffect(() => {
     if (fetchChartDataEnabled && bondingCurveAddress) {
       // Clear any pending timeout when dependencies change
@@ -635,31 +849,34 @@ export function useTokenDashboard(
         clearTimeout(fetchTimeoutRef.current);
       }
       
-      fetchChartData(false); // Initial fetch with caching
-      
-      // Dynamic polling interval based on timeframe - shorter timeframes need more frequent updates
+      fetchChartData(false, true); // Initial fetch with bulk prefetching
+    }
+  }, [fetchChartDataEnabled, bondingCurveAddress]); // Removed chartTimeframe to prevent re-polling on switches
+
+  // Separate effect for polling that doesn't restart on timeframe changes
+  useEffect(() => {
+    if (fetchChartDataEnabled && bondingCurveAddress) {
+      // Smart polling interval based on timeframe
       const getPollingInterval = (timeframe: string) => {
+        // Longer intervals for longer timeframes to reduce server load
         switch (timeframe) {
-          case '1m':
-            return 8000;  // 8 seconds for 1-minute charts (increased from 5s)
-          case '5m':
-            return 12000; // 12 seconds for 5-minute charts (increased from 8s)
-          case '15m':
-            return 15000; // 15 seconds for 15-minute charts (increased from 12s)
-          default:
-            return 20000; // 20 seconds for longer timeframes (increased from 10s)
+          case '1m': return 3000;  // 3 seconds
+          case '5m': return 10000; // 10 seconds  
+          case '15m': return 15000; // 15 seconds
+          case '1h': return 30000;  // 30 seconds
+          case '4h': return 60000;  // 1 minute
+          case '1d': return 120000; // 2 minutes
+          default: return 10000;    // Default 10 seconds
         }
       };
       
       const intervalId = setInterval(() => {
+        // Only poll if we're not currently transitioning
         fetchChartData(true); // Force refresh on polling
       }, getPollingInterval(chartTimeframe));
       
       return () => {
         clearInterval(intervalId);
-        if (fetchTimeoutRef.current) {
-          clearTimeout(fetchTimeoutRef.current);
-        }
       };
     }
   }, [fetchChartDataEnabled, bondingCurveAddress, chartTimeframe]);
@@ -686,6 +903,14 @@ export function useTokenDashboard(
     }
   }, [tokenInfo.balance, publicClient, bondingCurveAddress, walletAddress]);
 
+  // Refresh CORDEX balance when cordex token address becomes available
+  useEffect(() => {
+    if (publicClient && walletAddress && bondingCurveInfo.cordexTokenAddress) {
+      console.log("[useTokenDashboard] CORDEX token address available, fetching CORDEX balance");
+      refreshCordexBalance();
+    }
+  }, [publicClient, walletAddress, bondingCurveInfo.cordexTokenAddress]);
+
   // Add Contract Event Listener with better error handling
   useWatchContractEvent({
     address: bondingCurveAddress || undefined,
@@ -694,7 +919,7 @@ export function useTokenDashboard(
     enabled: !!bondingCurveAddress,
     // Add polling configuration to reduce filter usage
     poll: true,
-    pollingInterval: 5000, // Poll every 5 seconds instead of using persistent filters
+    pollingInterval: 2000, // Poll every 2 seconds for faster event detection
     onLogs(logs: Log[]) {
       console.log("[useTokenDashboard] TradeActivity Event Received:", logs);
       logs.forEach((log) => {
@@ -729,20 +954,24 @@ export function useTokenDashboard(
                 refreshTokenBalance();
               }
 
-              // Delay chart data fetch to allow backend processing
+              // Invalidate all cached chart data since trade affects all timeframes
               console.log(
-                "[useTokenDashboard] Scheduling chart data refresh in 2 seconds..."
+                "[useTokenDashboard] Trade detected - invalidating all chart caches..."
               );
               
-              // Shorter delay for short timeframes where users expect faster updates
-              const delay = (chartTimeframe === '1m' || chartTimeframe === '5m') ? 1000 : 2000;
+              // Clear all cached data to force fresh fetches
+              invalidateAllChartCaches();
+              
+              // Fast delay for chart refresh
+              const delay = 500;
               
               setTimeout(() => {
                 console.log(
-                  "[useTokenDashboard] Fetching delayed chart data..."
+                  "[useTokenDashboard] Fetching fresh chart data after trade..."
                 );
-                fetchChartData();
-              }, delay); // Dynamic delay based on timeframe
+                // Force refresh current timeframe and prefetch others
+                fetchChartData(true, true); // Force refresh + bulk prefetch
+              }, delay);
             } else {
               console.error(
                 "[useTokenDashboard] Failed to decode event args:",
@@ -1005,8 +1234,18 @@ export function useTokenDashboard(
           }!`,
           txHash: receipt.transactionHash,
         });
+        
+        // Invalidate chart caches since trade affects all timeframes
+        invalidateAllChartCaches();
+        
         await refreshBondingCurveInfo();
         await refreshTokenBalance();
+        await refreshCordexBalance();
+        
+        // Fetch fresh chart data with bulk prefetch
+        setTimeout(() => {
+          fetchChartData(true, true);
+        }, 1000); // Small delay to allow backend processing
       } else {
         console.error(
           "[useTokenDashboard] Buy transaction failed or receipt not received/failed.",
@@ -1064,8 +1303,18 @@ export function useTokenDashboard(
           }!`,
           txHash: receipt.transactionHash,
         });
+        
+        // Invalidate chart caches since trade affects all timeframes
+        invalidateAllChartCaches();
+        
         await refreshBondingCurveInfo();
         await refreshTokenBalance();
+        await refreshCordexBalance();
+        
+        // Fetch fresh chart data with bulk prefetch
+        setTimeout(() => {
+          fetchChartData(true, true);
+        }, 1000); // Small delay to allow backend processing
       } else {
         console.error(
           "[useTokenDashboard] Sell transaction failed or receipt not received/failed.",
@@ -1109,5 +1358,6 @@ export function useTokenDashboard(
     handleTimeframeChange,
     clearSuccessMessage,
     clearErrorMessage,
+    calculateMaxBuyableAmount,
   };
 }
