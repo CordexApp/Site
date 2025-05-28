@@ -6,3 +6,5 @@ smart contract refactoring (remove withdraw, revenue split, add fee and more)
 add option to show regular graph to charts 
 show wallets owning tokens
 show revenue metrics and trade volume
+INFURA RPC needs to be kept in check
+graph changes range when filler candle is added

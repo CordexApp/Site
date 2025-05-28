@@ -184,6 +184,27 @@ export default function PriceChart({
       });
     };
 
+    // Helper function to update fixed edges only, preserving current visible range
+    const updateFixedEdgesOnly = (chartData: CandlestickData[]) => {
+      if (chartData.length === 0) return;
+      
+      console.log("[PriceChart] Updating fixed edges only, preserving current view (FILLER-SAFE)");
+      
+      // Only update the timeScale options without changing visible range
+      chart.applyOptions({
+        timeScale: {
+          borderColor: "#334155",
+          timeVisible: true,
+          secondsVisible: timeframe === "1m" || timeframe === "5m",
+          fixLeftEdge: true,
+          fixRightEdge: true,
+        },
+      });
+      
+      // Do NOT call setVisibleRange - this preserves the user's current view
+      console.log("[PriceChart] Range preservation complete - user's view maintained");
+    };
+
     if (isIncrementalUpdate) {
       // Check if the update is just appending or replacing the last candle
       const newLastCandle = newChartData[newChartData.length - 1];
@@ -200,8 +221,9 @@ export default function PriceChart({
         series.update(newLastCandle);
         lastAppliedDataRef.current.push(newLastCandle);
         
-        // Reconfigure with new data boundaries
-        configureTimeScaleWithFixedEdges(lastAppliedDataRef.current);
+        // Update fixed edges to include new data but preserve user's selected view range
+        // This prevents automatic range changes when real-time filler adds candles
+        updateFixedEdgesOnly(lastAppliedDataRef.current);
       }
       setIsTransitioning(false);
     } else {

@@ -1,8 +1,10 @@
 import { useServiceLaunch } from "@/context/ServiceLaunchContext";
+import { useAccount } from "wagmi";
 import ImageUploader from "./ImageUploader";
 import { Input, LoadingDots, NumericInput, PrimaryButton } from "./ui";
 
 export default function ServiceForm() {
+  const { isConnected } = useAccount();
   const {
     serviceName,
     setServiceName,
@@ -33,6 +35,7 @@ export default function ServiceForm() {
         value={serviceName}
         onChange={(e) => setServiceName(e.target.value)}
         placeholder="my awesome service"
+        disabled={!isConnected}
         required
       />
 
@@ -42,6 +45,7 @@ export default function ServiceForm() {
         value={apiEndpoint}
         onChange={(e) => setApiEndpoint(e.target.value)}
         placeholder="https://api.myservice.com"
+        disabled={!isConnected}
         required
       />
 
@@ -49,6 +53,7 @@ export default function ServiceForm() {
         onImageSelected={handleImageSelect}
         imagePreview={imagePreview}
         label="service image"
+        disabled={!isConnected}
       />
 
       <NumericInput
@@ -58,6 +63,7 @@ export default function ServiceForm() {
         allowDecimal={true}
         step="0.001"
         placeholder="0.1"
+        disabled={!isConnected}
         required
       />
 
@@ -67,6 +73,7 @@ export default function ServiceForm() {
         value={tokenName}
         onChange={(e) => setTokenName(e.target.value)}
         placeholder="my service token"
+        disabled={!isConnected}
         required
       />
 
@@ -76,24 +83,19 @@ export default function ServiceForm() {
         value={tokenSymbol}
         onChange={(e) => setTokenSymbol(e.target.value)}
         placeholder="mst"
+        disabled={!isConnected}
         required
       />
 
       <PrimaryButton
         type="submit"
-        disabled={
-          isSubmitting || isPending || isWaitingForReceipt || isUploading
-        }
-        className="relative group"
+        disabled={!isConnected || isSubmitting || isPending || isWaitingForReceipt}
+        className="w-full"
       >
-        {isPending ? (
-          <LoadingDots text="submitting" />
-        ) : isSubmitting ? (
-          <LoadingDots text="confirming" />
-        ) : isWaitingForReceipt ? (
-          <LoadingDots text="verifying" />
-        ) : isUploading ? (
-          <LoadingDots text="uploading image" />
+        {!isConnected ? (
+          "connect wallet to launch"
+        ) : isSubmitting || isPending || isWaitingForReceipt || isUploading ? (
+          <LoadingDots text="launching service" />
         ) : (
           "launch service"
         )}

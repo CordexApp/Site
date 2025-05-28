@@ -1,4 +1,5 @@
 import React from "react";
+import { useAccount } from "wagmi";
 import { InputLabel } from "./ui";
 import { LoadingDots } from "./ui/LoadingDots";
 import { NumericInput } from "./ui/NumericInput";
@@ -67,6 +68,8 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
   clearSuccessMessage,
   onCalculateMaxBuyable,
 }) => {
+  const { isConnected } = useAccount();
+
   // Calculate if the user has sufficient balance to sell
   const hasInsufficientTokenBalance = () => {
     if (!tokenBalance || !sellState.amount) return false;
@@ -199,14 +202,14 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
                     value={buyState.amount}
                     onChange={(e) => handleBuyAmountChange(e.target.value)}
                     placeholder="0.0"
-                    disabled={buyState.isProcessing || buyState.isApproving}
+                    disabled={!isConnected || buyState.isProcessing || buyState.isApproving}
                     allowDecimal={true}
                   />
                   {/* Max button */}
                   {(cordexBalance || maxBuyableAmount) && (
                     <button
                       onClick={handleMaxBuy}
-                      disabled={buyState.isProcessing || buyState.isApproving}
+                      disabled={!isConnected || buyState.isProcessing || buyState.isApproving}
                       className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-400 hover:text-white disabled:text-gray-600 disabled:hover:text-gray-600 px-2 py-1 rounded border border-gray-600 hover:border-gray-400 disabled:border-gray-700"
                     >
                       max
@@ -232,12 +235,15 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
               <PrimaryButton
                 onClick={executeBuy}
                 disabled={
+                  !isConnected ||
                   !buyState.amount ||
                   buyState.isProcessing ||
                   Number(buyState.amount) <= 0
                 }
               >
-                {buyState.isProcessing ? (
+                {!isConnected ? (
+                  "connect wallet to buy"
+                ) : buyState.isProcessing ? (
                   <LoadingDots text={`buying ${tokenSymbol || "tokens"}`} />
                 ) : (
                   `buy ${tokenSymbol || "tokens"}`
@@ -246,9 +252,11 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
             ) : (
               <PrimaryButton
                 onClick={approveBuy}
-                disabled={buyState.isApproving}
+                disabled={!isConnected || buyState.isApproving}
               >
-                {buyState.isApproving ? (
+                {!isConnected ? (
+                  "connect wallet to approve"
+                ) : buyState.isApproving ? (
                   <LoadingDots text="setting spending cap" />
                 ) : (
                   "set spending cap"
@@ -266,14 +274,14 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
                     value={sellState.amount}
                     onChange={(e) => handleSellAmountChange(e.target.value)}
                     placeholder="0.0"
-                    disabled={sellState.isProcessing || sellState.isApproving}
+                    disabled={!isConnected || sellState.isProcessing || sellState.isApproving}
                     allowDecimal={true}
                   />
                   {/* Max button */}
                   {(tokenBalance || maxSellableAmount) && (
                     <button
                       onClick={handleMaxSell}
-                      disabled={sellState.isProcessing || sellState.isApproving}
+                      disabled={!isConnected || sellState.isProcessing || sellState.isApproving}
                       className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-gray-400 hover:text-white disabled:text-gray-600 disabled:hover:text-gray-600 px-2 py-1 rounded border border-gray-600 hover:border-gray-400 disabled:border-gray-700"
                     >
                       max
@@ -309,6 +317,7 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
               <PrimaryButton
                 onClick={executeSell}
                 disabled={
+                  !isConnected ||
                   !sellState.amount ||
                   sellState.isProcessing ||
                   Number(sellState.amount) <= 0 ||
@@ -316,7 +325,9 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
                   exceedsLiquidityLimit()
                 }
               >
-                {sellState.isProcessing ? (
+                {!isConnected ? (
+                  "connect wallet to sell"
+                ) : sellState.isProcessing ? (
                   <LoadingDots text={`selling ${tokenSymbol || "tokens"}`} />
                 ) : (
                   `sell ${tokenSymbol || "tokens"}`
@@ -325,9 +336,11 @@ const TokenTrading: React.FC<TokenTradingProps> = ({
             ) : (
               <PrimaryButton
                 onClick={approveSell}
-                disabled={sellState.isApproving}
+                disabled={!isConnected || sellState.isApproving}
               >
-                {sellState.isApproving ? (
+                {!isConnected ? (
+                  "connect wallet to approve"
+                ) : sellState.isApproving ? (
                   <LoadingDots text="setting spending cap" />
                 ) : (
                   "set spending cap"

@@ -1,11 +1,13 @@
 "use client";
 
 import { useBondingCurveSetup } from "@/hooks/useBondingCurveSetup";
+import { useAccount } from "wagmi";
 import { InputLabel } from "./ui/InputLabel";
 import { LoadingDots } from "./ui/LoadingDots";
 import { SecondaryButton } from "./ui/SecondaryButton";
 
 export default function BondingCurveSetup() {
+  const { isConnected } = useAccount();
   const {
     providerTokenAddress,
     bondingCurveAddress,
@@ -69,7 +71,7 @@ export default function BondingCurveSetup() {
           value={percentage}
           onChange={(e) => setPercentage(e.target.value)}
           className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-          disabled={isApprovePending || isDeployPending || isApproveTxConfirming || isDeployTxConfirming}
+          disabled={!isConnected || isApprovePending || isDeployPending || isApproveTxConfirming || isDeployTxConfirming}
         />
         <p className="text-sm mt-1 text-gray-400">
           Initial deposit: {formattedInitialAmount} tokens ({percentage}%)
@@ -87,9 +89,11 @@ export default function BondingCurveSetup() {
           <SecondaryButton
             onClick={handleApprove}
             className="w-full"
-            disabled={isApprovePending || isApproveTxConfirming}
+            disabled={!isConnected || isApprovePending || isApproveTxConfirming}
           >
-            {isApprovePending || isApproveTxConfirming ? (
+            {!isConnected ? (
+              "connect wallet to approve"
+            ) : isApprovePending || isApproveTxConfirming ? (
               <LoadingDots text={isApproveTxConfirming ? "confirming approval" : "approve tokens"} />
             ) : (
               "1. Approve Tokens"
@@ -100,9 +104,11 @@ export default function BondingCurveSetup() {
         <SecondaryButton
           onClick={handleDeploy}
           className={`w-full ${!allowanceEnough ? 'opacity-50 cursor-not-allowed' : ''}`}
-          disabled={!allowanceEnough || isDeployPending || isDeployTxConfirming}
+          disabled={!isConnected || !allowanceEnough || isDeployPending || isDeployTxConfirming}
         >
-          {isDeployPending || isDeployTxConfirming ? (
+          {!isConnected ? (
+            "connect wallet to deploy"
+          ) : isDeployPending || isDeployTxConfirming ? (
             <LoadingDots text={isDeployTxConfirming ? "confirming deployment" : "deploying curve"} />
           ) : (
             allowanceEnough ? "Deploy Bonding Curve" : "2. Deploy Bonding Curve"

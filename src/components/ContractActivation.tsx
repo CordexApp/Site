@@ -45,7 +45,7 @@ export default function ContractActivation() {
     }
   }, [isConfirmed, refreshData, txHash]);
 
-  // Don't show if not owner
+  // Don't show if not owner or wallet not connected
   const isOwner = ownerAddress === walletAddress;
   if (!isOwner || !providerContractAddress) {
     return null;
@@ -53,7 +53,7 @@ export default function ContractActivation() {
 
   // Toggle contract active status
   const toggleActive = () => {
-    if (!providerContractAddress) return;
+    if (!providerContractAddress || !walletAddress) return;
     
     const newStatus = !isActiveLocal;
     
@@ -65,38 +65,32 @@ export default function ContractActivation() {
   };
 
   return (
-    <div className="border border-gray-700 rounded-md p-4 mt-4">
+    <div className="border border-gray-700 rounded-md p-4">
       <h3 className="text-lg font-medium mb-3">Contract Status</h3>
       
-      <div className="flex flex-col space-y-3">
-        <div className="flex items-center space-x-2">
-          <div className={`h-3 w-3 rounded-full ${isActiveLocal ? "bg-green-500" : "bg-cordex-red"}`}></div>
-          <span className="text-sm">
-            {isActiveLocal ? "Contract is active" : "Contract is inactive"}
-          </span>
-        </div>
-        
-        <p className="text-sm text-gray-400">
-          {isActiveLocal 
-            ? "Users can interact with your service and generate tokens."
-            : "Users cannot interact with your service while inactive."}
-        </p>
-        
-        {error && (
-          <p className="text-sm text-cordex-red">
-            Error: {error.message || "Failed to update contract status"}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm">
+            Status: <span className={`font-semibold ${isActiveLocal ? 'text-green-400' : 'text-red-400'}`}>
+              {isActiveLocal ? 'Active' : 'Inactive'}
+            </span>
           </p>
-        )}
+          <p className="text-xs text-gray-400 mt-1">
+            {isActiveLocal ? 'Users can interact with your service' : 'Service is currently disabled'}
+          </p>
+        </div>
         
         <SecondaryButton
           onClick={toggleActive}
-          disabled={isPending || isConfirming}
-          className="mt-2"
+          disabled={!walletAddress || isPending || isConfirming}
+          className="ml-4"
         >
-          {isPending || isConfirming ? (
-            <LoadingDots text={isConfirming ? "confirming" : "processing"} />
+          {!walletAddress ? (
+            "connect wallet"
+          ) : isPending || isConfirming ? (
+            <LoadingDots text={isConfirming ? "confirming" : (isActiveLocal ? "deactivating" : "activating")} />
           ) : (
-            isActiveLocal ? "Deactivate Contract" : "Activate Contract"
+            isActiveLocal ? "Deactivate" : "Activate"
           )}
         </SecondaryButton>
       </div>

@@ -8,6 +8,7 @@ import { createService } from '@/services/servicesService';
 import { ethers } from 'ethers';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useAccount } from 'wagmi';
 import { Alert } from './ui/Alert';
 import { Card } from './ui/Card';
 import { CopyableHash } from './ui/CopyableHash';
@@ -35,6 +36,7 @@ interface ContractEvent {
 export function LaunchServiceFlow() {
   const router = useRouter();
   const { provider, address, signer } = useWeb3();
+  const { address: walletAddress } = useAccount();
   
   // Form fields
   const [serviceName, setServiceName] = useState('');
@@ -421,10 +423,10 @@ export function LaunchServiceFlow() {
             
             <button
               onClick={handleServiceDeployment}
-              disabled={currentStep !== 'input'}
+              disabled={currentStep !== 'input' || !walletAddress}
               className="px-4 py-2 border border-white text-white font-medium hover:bg-white hover:text-black transition-colors cursor-pointer flex justify-center items-center w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Launch Service
+              {!walletAddress ? "connect wallet to launch" : "Launch Service"}
             </button>
           </>
         )}

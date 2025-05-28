@@ -33,7 +33,18 @@ export default function NavigationBar() {
         )}
         
         {/* Launch service button */}
-        <PrimaryButton href="/launch">launch a service</PrimaryButton>
+        {isConnected ? (
+          <PrimaryButton href="/launch">launch a service</PrimaryButton>
+        ) : (
+          <PrimaryButton 
+            onClick={() => {}} 
+            disabled={true}
+            className="opacity-50 cursor-not-allowed"
+            title="Connect wallet to launch a service"
+          >
+            launch a service
+          </PrimaryButton>
+        )}
         
         {/* Not connected - show connect button */}
         {!isConnected && (

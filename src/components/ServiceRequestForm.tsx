@@ -4,6 +4,7 @@ import { useService } from "@/context/ServiceContext";
 import useApiTokenGeneration from "@/hooks/useApiTokenGeneration";
 import { makeApiRequest } from "@/services/contractServices";
 import { useEffect, useState } from "react";
+import { useAccount } from "wagmi";
 import { Input, InputLabel } from "./ui";
 import { LoadingDots } from "./ui/LoadingDots";
 import { PrimaryButton } from "./ui/PrimaryButton";
@@ -19,6 +20,7 @@ export default function ServiceRequestForm({
   endpoint,
   providerContractAddress,
 }: ServiceRequestFormProps) {
+  const { isConnected } = useAccount();
   const [requestInput, setRequestInput] = useState("");
   const [response, setResponse] = useState<any>(null);
   const [isLoadingApi, setIsLoadingApi] = useState(false);
@@ -248,16 +250,18 @@ export default function ServiceRequestForm({
             value={requestInput}
             onChange={(e) => setRequestInput(e.target.value)}
             placeholder="generate image of..."
-            disabled={isProcessing}
+            disabled={isProcessing || !isConnected}
           />
         </div>
 
         <div>
           <PrimaryButton
             type="submit"
-            disabled={isProcessing || !requestInput.trim() || !maxEscrow}
+            disabled={isProcessing || !requestInput.trim() || !maxEscrow || !isConnected}
           >
-            {isProcessing ? (
+            {!isConnected ? (
+              "connect wallet to send"
+            ) : isProcessing ? (
               <LoadingDots text={statusText.toLowerCase()} />
             ) : (
               "send"

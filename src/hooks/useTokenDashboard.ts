@@ -1,41 +1,41 @@
 import { ERC20Abi } from "@/abis/ERC20";
 import { TIMEFRAME_ORDER } from "@/config";
 import {
-  approveTokens,
-  buyTokens,
-  calculatePrice,
-  findBondingCurveForProviderToken,
-  getAccumulatedFees,
-  getCordexTokenAddress,
-  getCurrentPrice,
-  getMaxSellableAmount,
-  getSellPayoutEstimate,
-  getTokenAllowance,
-  getTokenSupply,
-  sellTokens,
+    approveTokens,
+    buyTokens,
+    calculatePrice,
+    findBondingCurveForProviderToken,
+    getAccumulatedFees,
+    getCordexTokenAddress,
+    getCurrentPrice,
+    getMaxSellableAmount,
+    getSellPayoutEstimate,
+    getTokenAllowance,
+    getTokenSupply,
+    sellTokens,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import {
-  getCoinContractAddressFast,
-  getOHLCVDataFast,
-  OHLCVCandle,
-  refreshCacheForCurve
+    getCoinContractAddressFast,
+    getOHLCVDataFast,
+    OHLCVCandle,
+    refreshCacheForCurve
 } from "@/services/tradingDataService";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Abi,
-  decodeEventLog,
-  formatEther,
-  Log,
-  maxUint256,
-  parseAbiItem,
-  parseEther,
+    Abi,
+    decodeEventLog,
+    formatEther,
+    Log,
+    maxUint256,
+    parseAbiItem,
+    parseEther,
 } from "viem";
 import {
-  useAccount,
-  usePublicClient,
-  useWatchContractEvent,
-  useWriteContract,
+    useAccount,
+    usePublicClient,
+    useWatchContractEvent,
+    useWriteContract,
 } from "wagmi";
 import { useWebSocketChart } from './useWebSocketChart';
 
