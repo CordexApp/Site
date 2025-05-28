@@ -3,13 +3,13 @@
 import { TIMEFRAME_LABELS, TIMEFRAME_ORDER } from "@/config";
 import { OHLCVCandle } from "@/services/tradingDataService";
 import {
-    CandlestickData,
-    CandlestickSeries,
-    ColorType,
-    createChart,
-    IChartApi,
-    ISeriesApi,
-    UTCTimestamp
+  CandlestickData,
+  CandlestickSeries,
+  ColorType,
+  createChart,
+  IChartApi,
+  ISeriesApi,
+  UTCTimestamp
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
 
@@ -34,6 +34,7 @@ export default function PriceChart({
   const lastAppliedDataRef = useRef<CandlestickData[]>([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [lastTimeframeChange, setLastTimeframeChange] = useState<number>(0);
+  const userInitiatedChangeRef = useRef(false);
 
   // Set up chart only once - no longer depends on timeframe
   useEffect(() => {
@@ -167,8 +168,8 @@ export default function PriceChart({
         "[PriceChart] Setting full data (length: " + newChartData.length + ")"
       );
       
-      // Add transition effect for timeframe changes
-      if (lastAppliedData.length > 0) {
+      // Add transition effect only for user-initiated timeframe changes
+      if (lastAppliedData.length > 0 && userInitiatedChangeRef.current) {
         setIsTransitioning(true);
         // Small delay to create smooth transition
         setTimeout(() => {
@@ -176,13 +177,15 @@ export default function PriceChart({
           lastAppliedDataRef.current = newChartData;
           chart.timeScale().fitContent();
           setIsTransitioning(false);
+          userInitiatedChangeRef.current = false; // Reset flag after transition
         }, 50);
       } else {
-        // Initial load - no transition needed
+        // Initial load or automatic data update - no transition needed
         series.setData(newChartData);
         lastAppliedDataRef.current = newChartData;
         chart.timeScale().fitContent();
         setIsTransitioning(false);
+        userInitiatedChangeRef.current = false; // Reset flag
       }
     }
   }, [data]);
@@ -201,6 +204,7 @@ export default function PriceChart({
     if (now - lastTimeframeChange < 200) return; // 200ms cooldown
     
     setLastTimeframeChange(now);
+    userInitiatedChangeRef.current = true; // Mark as user-initiated change
     setIsTransitioning(true);
     if (onTimeframeChange) {
       onTimeframeChange(tf);
@@ -222,10 +226,6 @@ export default function PriceChart({
                 timeframe === tf
                   ? "border-1 border-white text-white"
                   : "border-1 border-gray-700 text-white"
-              } ${
-                isTransitioning && tf === timeframe
-                  ? "opacity-75 animate-pulse"
-                  : ""
               } ${
                 isTransitioning
                   ? "cursor-not-allowed opacity-50"

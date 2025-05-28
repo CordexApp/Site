@@ -13,8 +13,8 @@ const FAST_API_BASE_URL = "http://localhost:8000";
  */
 export function sortTimeframes(timeframes: string[]): string[] {
   return timeframes.sort((a: string, b: string) => {
-    const indexA = TIMEFRAME_ORDER.indexOf(a);
-    const indexB = TIMEFRAME_ORDER.indexOf(b);
+    const indexA = TIMEFRAME_ORDER.indexOf(a as "1m" | "5m" | "15m" | "1h" | "4h" | "1d");
+    const indexB = TIMEFRAME_ORDER.indexOf(b as "1m" | "5m" | "15m" | "1h" | "4h" | "1d");
     
     // If timeframe is not in our known list, put it at the end
     if (indexA === -1) return 1;
@@ -352,12 +352,11 @@ export async function getOHLCVDataBulk(
       const results: Record<string, OHLCVResponse> = {};
       for (const [timeframe, tfData] of Object.entries(data.data as any)) {
         results[timeframe] = {
-          candles: tfData.candles || [],
-          count: tfData.count || 0,
+          candles: (tfData as any).candles || [],
+          count: (tfData as any).count || 0,
           timeframe: timeframe
         };
       }
-      
       return results;
     } catch (error) {
       console.error(`Bulk OHLCV fetch error (attempt ${attemptNumber}/${retries}):`, error);

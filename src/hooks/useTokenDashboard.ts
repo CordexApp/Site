@@ -16,13 +16,12 @@ import {
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import {
-  getAvailableTimeframesFast,
   getCoinContractAddressFast,
-  getOHLCVDataBulk,
   getOHLCVDataFast,
-  OHLCVCandle
+  OHLCVCandle,
+  refreshCacheForCurve
 } from "@/services/tradingDataService";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Abi,
   decodeEventLog,
@@ -38,6 +37,7 @@ import {
   useWatchContractEvent,
   useWriteContract,
 } from "wagmi";
+import { useWebSocketChart } from './useWebSocketChart';
 
 // Types (Ensure these are defined or imported correctly)
 export interface TokenInfo {
@@ -130,15 +130,15 @@ export function useTokenDashboard(
     [...TIMEFRAME_ORDER]
   );
   
-  // Add caching for chart data with improved TTL strategy
+  // Add caching for chart data with aggressive TTL strategy for real-time updates
   const chartDataCache = useRef<Record<string, { data: OHLCVCandle[], timestamp: number }>>({});
   const CHART_CACHE_TTL_MAP: Record<string, number> = {
-    '1m': 30000,   // 30 seconds for 1-minute data
-    '5m': 60000,   // 1 minute for 5-minute data  
-    '15m': 180000, // 3 minutes for 15-minute data
-    '1h': 300000,  // 5 minutes for 1-hour data
-    '4h': 600000,  // 10 minutes for 4-hour data
-    '1d': 1800000, // 30 minutes for daily data
+    '1m': 5000,    // 5 seconds for 1-minute data
+    '5m': 10000,   // 10 seconds for 5-minute data  
+    '15m': 15000,  // 15 seconds for 15-minute data
+    '1h': 30000,   // 30 seconds for 1-hour data
+    '4h': 60000,   // 1 minute for 4-hour data
+    '1d': 120000,  // 2 minutes for daily data
   };
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const bulkDataCache = useRef<Record<string, OHLCVCandle[]> | null>(null);
@@ -535,6 +535,23 @@ export function useTokenDashboard(
     }
   };
 
+  // Helper function to proactively refresh server-side cache after trades
+  const refreshServerCache = async () => {
+    if (!bondingCurveAddress) return;
+    
+    console.log("[useTokenDashboard] Proactively refreshing server cache...");
+    try {
+      const result = await refreshCacheForCurve(bondingCurveAddress, 200); // Cache more data
+      if (result.success) {
+        console.log(`[useTokenDashboard] Server cache refreshed successfully for ${result.prewarmedTimeframes} timeframes`);
+      } else {
+        console.warn("[useTokenDashboard] Server cache refresh failed:", result.message);
+      }
+    } catch (error) {
+      console.error("[useTokenDashboard] Error refreshing server cache:", error);
+    }
+  };
+
   // Helper function to invalidate all chart caches
   const invalidateAllChartCaches = () => {
     console.log("[useTokenDashboard] Invalidating all chart caches");
@@ -543,153 +560,99 @@ export function useTokenDashboard(
     bulkDataTimestamp.current = 0;
   };
 
-  // Function to fetch chart data with bulk prefetching
-  const fetchChartData = async (forceRefresh = false, useBulkPrefetch = false) => {
-    if (!bondingCurveAddress) return;
-
-    try {
-      // Check cache first (unless force refresh)
-      const cacheKey = `${bondingCurveAddress}-${chartTimeframe}`;
-      const cachedData = chartDataCache.current[cacheKey];
-      const cacheAge = cachedData ? Date.now() - cachedData.timestamp : Infinity;
-      const cacheTTL = CHART_CACHE_TTL_MAP[chartTimeframe] || 60000;
+  // Memoize callback functions to prevent infinite re-renders
+  const onChartUpdate = useCallback((data: any, tradeData?: any) => {
+    const updateStart = Date.now();
+    console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Received real-time chart update`);
+    
+    // Update chart data with the current timeframe
+    if (data[chartTimeframe]) {
+      const chartUpdateStart = Date.now();
+      setChartData(data[chartTimeframe].candles);
+      const chartUpdateTime = Date.now() - chartUpdateStart;
+      console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Chart data updated for ${chartTimeframe} (${data[chartTimeframe].candles.length} candles) in ${chartUpdateTime}ms`);
+    }
+    
+    // If there's trade data, it means a new trade occurred
+    if (tradeData) {
+      console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] New trade detected, refreshing contract info`);
+      // Refresh contract info when new trades come in
+      refreshBondingCurveInfo();
       
-      if (!forceRefresh && cachedData && cacheAge < cacheTTL) {
-        console.log(`[useTokenDashboard] Using cached data for ${chartTimeframe} (age: ${Math.round(cacheAge/1000)}s)`);
-        setChartData(cachedData.data);
-        return;
+      // Refresh user balance if the trade was from current user
+      if (tradeData.user_address && walletAddress && 
+          tradeData.user_address.toLowerCase() === walletAddress.toLowerCase()) {
+        console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Trade from current user, refreshing token balance`);
+        refreshTokenBalance();
       }
+    }
+    
+    const totalUpdateTime = Date.now() - updateStart;
+    console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] TOTAL chart update callback completed in ${totalUpdateTime}ms`);
+  }, [chartTimeframe, walletAddress, refreshBondingCurveInfo, refreshTokenBalance]);
 
-      // Check bulk cache first
-      const bulkCacheAge = Date.now() - bulkDataTimestamp.current;
-      if (!forceRefresh && bulkDataCache.current && bulkCacheAge < 60000 && bulkDataCache.current[chartTimeframe]) {
-        console.log(`[useTokenDashboard] Using bulk cached data for ${chartTimeframe}`);
-        const bulkData = bulkDataCache.current[chartTimeframe];
-        chartDataCache.current[cacheKey] = {
-          data: bulkData,
-          timestamp: Date.now()
-        };
-        setChartData(bulkData);
-        return;
-      }
+  const onConnectionStatusChange = useCallback((connected: boolean) => {
+    console.log(`[useTokenDashboard] WebSocket connection: ${connected ? 'connected' : 'disconnected'}`);
+  }, []);
 
-      console.log(`[useTokenDashboard] Fetching fresh data for ${chartTimeframe} (bulk: ${useBulkPrefetch})`);
+  // Replace polling-based chart data with WebSocket
+  const {
+    chartData: wsChartData,
+    isConnected: wsConnected,
+    connectionError: wsError,
+    requestData: requestWsData,
+    lastTradeData,
+    reconnect: reconnectWs
+  } = useWebSocketChart({
+    bondingCurveAddress: bondingCurveAddress,
+    enabled: fetchChartDataEnabled && !!bondingCurveAddress,
+    onChartUpdate,
+    onConnectionStatusChange
+  });
 
-      // Only fetch available timeframes if we don't have them yet or they're empty
-      if (availableTimeframes.length === 0 || JSON.stringify(availableTimeframes) === JSON.stringify(TIMEFRAME_ORDER)) {
-        const timeframes = await getAvailableTimeframesFast(bondingCurveAddress);
-        if (timeframes.length > 0) {
-          setAvailableTimeframes(timeframes);
+  // Handle timeframe changes with WebSocket
+  const handleTimeframeChange = (newTimeframe: string) => {
+    console.log(`[useTokenDashboard] Timeframe change: ${chartTimeframe} -> ${newTimeframe}`);
+    setChartTimeframe(newTimeframe);
+    
+    // Update chart data immediately if we have WebSocket data
+    if (wsChartData && wsChartData[newTimeframe]) {
+      setChartData(wsChartData[newTimeframe].candles);
+    } else {
+      // Request data for the new timeframe via WebSocket
+      requestWsData(newTimeframe, 1000);
+    }
+  };
 
-          // If current timeframe is not available, use the first one
-          if (!timeframes.includes(chartTimeframe)) {
-            setChartTimeframe(timeframes[0]);
-            return; // This will trigger another call with the new timeframe
-          }
-        }
-      }
-
-             // Use bulk prefetch for initial load or when specifically requested
-       if (useBulkPrefetch || !bulkDataCache.current) {
-         console.log(`[useTokenDashboard] Using bulk prefetch for multiple timeframes`);
-         try {
-           const bulkResponse = await getOHLCVDataBulk(bondingCurveAddress, availableTimeframes, 1000);
-           
-           // Cache all timeframes from bulk response
-           bulkDataCache.current = {};
-           Object.entries(bulkResponse).forEach(([timeframe, responseData]: [string, any]) => {
-             if (responseData.candles && responseData.candles.length > 0) {
-               bulkDataCache.current![timeframe] = responseData.candles;
-               
-               // Also update individual cache
-               const individualCacheKey = `${bondingCurveAddress}-${timeframe}`;
-               chartDataCache.current[individualCacheKey] = {
-                 data: responseData.candles,
-                 timestamp: Date.now()
-               };
-             }
-           });
-           bulkDataTimestamp.current = Date.now();
-           
-           // Set data for current timeframe
-           if (bulkDataCache.current[chartTimeframe]) {
-             setChartData(bulkDataCache.current[chartTimeframe]);
-           } else {
-             setChartData([]);
-           }
-           
-           console.log(`[useTokenDashboard] Bulk prefetch completed, cached ${Object.keys(bulkDataCache.current).length} timeframes`);
-           return;
-         } catch (bulkError) {
-           console.warn(`[useTokenDashboard] Bulk prefetch failed, falling back to single request:`, bulkError);
-         }
-       }
-
-      // Fallback to single timeframe fetch
-      const response = await getOHLCVDataFast(
-        bondingCurveAddress,
-        chartTimeframe,
-        1000 // Limit to 1000 candles
-      );
-
+  // Fallback to HTTP polling if WebSocket fails
+  const fetchChartDataHTTP = async (timeframe: string) => {
+    if (!bondingCurveAddress) return;
+    
+    try {
+      const response = await getOHLCVDataFast(bondingCurveAddress, timeframe, 1000);
       if (response.candles.length > 0) {
-        // Cache the data
-        chartDataCache.current[cacheKey] = {
-          data: response.candles,
-          timestamp: Date.now()
-        };
         setChartData(response.candles);
-      } else {
-        setChartData([]);
       }
     } catch (error) {
-      console.error("Error fetching chart data:", error);
-      setChartData([]);
+      console.error('[useTokenDashboard] HTTP fallback failed:', error);
     }
   };
 
-  // Handle timeframe change with enhanced caching and smooth transitions
-  const handleTimeframeChange = (timeframe: string) => {
-    // Clear any pending fetch
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
+  // Use HTTP fallback if WebSocket is not connected
+  useEffect(() => {
+    if (fetchChartDataEnabled && bondingCurveAddress && !wsConnected && wsError) {
+      console.log('[useTokenDashboard] WebSocket failed, using HTTP fallback');
+      fetchChartDataHTTP(chartTimeframe);
     }
-    
-    // Don't do anything if it's the same timeframe
-    if (chartTimeframe === timeframe) return;
-    
-    console.log(`[useTokenDashboard] Switching from ${chartTimeframe} to ${timeframe}`);
-    setChartTimeframe(timeframe);
-    
-    // Check multiple cache sources for this timeframe
-    const cacheKey = `${bondingCurveAddress}-${timeframe}`;
-    const cachedData = chartDataCache.current[cacheKey];
-    const bulkCachedData = bulkDataCache.current?.[timeframe];
-    
-    // Try individual cache first
-    if (cachedData && (Date.now() - cachedData.timestamp) < CHART_CACHE_TTL_MAP[timeframe]) {
-      console.log(`[useTokenDashboard] Instant switch to cached ${timeframe} data`);
-      setChartData(cachedData.data);
-      return;
+  }, [fetchChartDataEnabled, bondingCurveAddress, wsConnected, wsError, chartTimeframe]);
+
+  // Initial chart data load when bonding curve address changes
+  useEffect(() => {
+    if (fetchChartDataEnabled && bondingCurveAddress && wsConnected) {
+      // Request initial data for current timeframe
+      requestWsData(chartTimeframe, 1000);
     }
-    
-    // Try bulk cache as fallback
-    if (bulkCachedData && (Date.now() - bulkDataTimestamp.current) < 120000) { // 2 minute TTL for bulk cache
-      console.log(`[useTokenDashboard] Using bulk cached data for ${timeframe}`);
-      // Update individual cache with bulk data
-      chartDataCache.current[cacheKey] = {
-        data: bulkCachedData,
-        timestamp: Date.now()
-      };
-      setChartData(bulkCachedData);
-      return;
-    }
-    
-    // No cached data available - fetch fresh data immediately
-    console.log(`[useTokenDashboard] No cached data for ${timeframe}, fetching fresh data immediately`);
-    // Use immediate execution for the fastest possible switch
-    fetchChartData(false, false); // Don't use bulk prefetch for timeframe switches
-  };
+  }, [fetchChartDataEnabled, bondingCurveAddress, wsConnected, chartTimeframe]);
 
   // Define the event ABI item string for parsing
   const tradeActivityEventAbi = parseAbiItem(
@@ -841,46 +804,6 @@ export function useTokenDashboard(
     };
   }, [providerContractAddress, publicClient, walletAddress]);
 
-  // Fetch chart data when bonding curve address changes or initial load
-  useEffect(() => {
-    if (fetchChartDataEnabled && bondingCurveAddress) {
-      // Clear any pending timeout when dependencies change
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
-      
-      fetchChartData(false, true); // Initial fetch with bulk prefetching
-    }
-  }, [fetchChartDataEnabled, bondingCurveAddress]); // Removed chartTimeframe to prevent re-polling on switches
-
-  // Separate effect for polling that doesn't restart on timeframe changes
-  useEffect(() => {
-    if (fetchChartDataEnabled && bondingCurveAddress) {
-      // Smart polling interval based on timeframe
-      const getPollingInterval = (timeframe: string) => {
-        // Longer intervals for longer timeframes to reduce server load
-        switch (timeframe) {
-          case '1m': return 3000;  // 3 seconds
-          case '5m': return 10000; // 10 seconds  
-          case '15m': return 15000; // 15 seconds
-          case '1h': return 30000;  // 30 seconds
-          case '4h': return 60000;  // 1 minute
-          case '1d': return 120000; // 2 minutes
-          default: return 10000;    // Default 10 seconds
-        }
-      };
-      
-      const intervalId = setInterval(() => {
-        // Only poll if we're not currently transitioning
-        fetchChartData(true); // Force refresh on polling
-      }, getPollingInterval(chartTimeframe));
-      
-      return () => {
-        clearInterval(intervalId);
-      };
-    }
-  }, [fetchChartDataEnabled, bondingCurveAddress, chartTimeframe]);
-
   // Check token allowances whenever relevant addresses change
   useEffect(() => {
     if (publicClient && walletAddress && bondingCurveAddress && 
@@ -911,15 +834,15 @@ export function useTokenDashboard(
     }
   }, [publicClient, walletAddress, bondingCurveInfo.cordexTokenAddress]);
 
-  // Add Contract Event Listener with better error handling
+  // Add Contract Event Listener with ultra-fast polling for immediate trade detection
   useWatchContractEvent({
     address: bondingCurveAddress || undefined,
     abi: [tradeActivityEventAbi],
     eventName: "TradeActivity",
     enabled: !!bondingCurveAddress,
-    // Add polling configuration to reduce filter usage
+    // Ultra-aggressive polling for real-time updates
     poll: true,
-    pollingInterval: 2000, // Poll every 2 seconds for faster event detection
+    pollingInterval: 500, // Poll every 500ms for immediate event detection
     onLogs(logs: Log[]) {
       console.log("[useTokenDashboard] TradeActivity Event Received:", logs);
       logs.forEach((log) => {
@@ -954,24 +877,29 @@ export function useTokenDashboard(
                 refreshTokenBalance();
               }
 
-              // Invalidate all cached chart data since trade affects all timeframes
+              // Immediate cache refresh and chart update for ANY trade
               console.log(
-                "[useTokenDashboard] Trade detected - invalidating all chart caches..."
+                "[useTokenDashboard] Trade detected - immediate refresh..."
               );
               
-              // Clear all cached data to force fresh fetches
-              invalidateAllChartCaches();
+              // Parallel refresh execution
+              const eventRefreshPromises = [
+                refreshServerCache(),
+                refreshBondingCurveInfo()
+              ];
               
-              // Fast delay for chart refresh
-              const delay = 500;
-              
-              setTimeout(() => {
-                console.log(
-                  "[useTokenDashboard] Fetching fresh chart data after trade..."
-                );
-                // Force refresh current timeframe and prefetch others
-                fetchChartData(true, true); // Force refresh + bulk prefetch
-              }, delay);
+              Promise.all(eventRefreshPromises).then(() => {
+                console.log("[useTokenDashboard] Event-triggered refreshes completed");
+                
+                // Invalidate all cached chart data and fetch fresh data immediately
+                invalidateAllChartCaches();
+                requestWsData(chartTimeframe, 1000); // Force refresh + bulk prefetch
+              }).catch(error => {
+                console.error("[useTokenDashboard] Error in event refresh:", error);
+                // Still try to fetch fresh chart data
+                invalidateAllChartCaches();
+                requestWsData(chartTimeframe, 1000);
+              });
             } else {
               console.error(
                 "[useTokenDashboard] Failed to decode event args:",
@@ -1105,6 +1033,8 @@ export function useTokenDashboard(
           );
         }
         
+        // Cache refresh functionality removed (not implemented)
+        
         setSuccessInfo({
           message: "cordex approved successfully!",
           txHash: receipt.transactionHash,
@@ -1168,6 +1098,8 @@ export function useTokenDashboard(
           );
         }
         
+        // Cache refresh functionality removed (not implemented)
+        
         setSuccessInfo({
           message: `${
             tokenInfo.symbol?.toLowerCase() || "tokens"
@@ -1228,6 +1160,7 @@ export function useTokenDashboard(
           amount: "",
           estimatedCost: "0",
         }));
+        
         setSuccessInfo({
           message: `successfully bought ${boughtAmount} ${
             tokenInfo.symbol?.toLowerCase() || "tokens"
@@ -1235,17 +1168,30 @@ export function useTokenDashboard(
           txHash: receipt.transactionHash,
         });
         
-        // Invalidate chart caches since trade affects all timeframes
-        invalidateAllChartCaches();
+        // Immediate cache refresh and data update (no delays)
+        console.log("[useTokenDashboard] Starting immediate post-trade refresh...");
         
-        await refreshBondingCurveInfo();
-        await refreshTokenBalance();
-        await refreshCordexBalance();
+        // Parallel execution for maximum speed
+        const refreshPromises = [
+          refreshServerCache(),
+          refreshBondingCurveInfo(),
+          refreshTokenBalance(),
+          refreshCordexBalance()
+        ];
         
-        // Fetch fresh chart data with bulk prefetch
-        setTimeout(() => {
-          fetchChartData(true, true);
-        }, 1000); // Small delay to allow backend processing
+        // Execute all refreshes in parallel
+        Promise.all(refreshPromises).then(() => {
+          console.log("[useTokenDashboard] All post-trade refreshes completed");
+          
+          // Invalidate all chart caches and fetch fresh data immediately
+          invalidateAllChartCaches();
+          requestWsData(chartTimeframe, 1000); // Force refresh + bulk prefetch
+        }).catch(error => {
+          console.error("[useTokenDashboard] Error in post-trade refresh:", error);
+          // Still try to fetch fresh chart data even if other refreshes fail
+          invalidateAllChartCaches();
+          requestWsData(chartTimeframe, 1000);
+        });
       } else {
         console.error(
           "[useTokenDashboard] Buy transaction failed or receipt not received/failed.",
@@ -1280,6 +1226,7 @@ export function useTokenDashboard(
     setSellState((prev) => ({ ...prev, isProcessing: true }));
     setError(null);
     setSuccessInfo(null);
+
     try {
       const tokenAmountWei = sellState.amount;
       const receipt = await sellTokens(
@@ -1297,6 +1244,7 @@ export function useTokenDashboard(
           amount: "",
           estimatedCost: "0",
         }));
+        
         setSuccessInfo({
           message: `successfully sold ${soldAmount} ${
             tokenInfo.symbol?.toLowerCase() || "tokens"
@@ -1304,17 +1252,30 @@ export function useTokenDashboard(
           txHash: receipt.transactionHash,
         });
         
-        // Invalidate chart caches since trade affects all timeframes
-        invalidateAllChartCaches();
+        // Immediate cache refresh and data update (no delays)
+        console.log("[useTokenDashboard] Starting immediate post-trade refresh...");
         
-        await refreshBondingCurveInfo();
-        await refreshTokenBalance();
-        await refreshCordexBalance();
+        // Parallel execution for maximum speed
+        const refreshPromises = [
+          refreshServerCache(),
+          refreshBondingCurveInfo(),
+          refreshTokenBalance(),
+          refreshCordexBalance()
+        ];
         
-        // Fetch fresh chart data with bulk prefetch
-        setTimeout(() => {
-          fetchChartData(true, true);
-        }, 1000); // Small delay to allow backend processing
+        // Execute all refreshes in parallel
+        Promise.all(refreshPromises).then(() => {
+          console.log("[useTokenDashboard] All post-trade refreshes completed");
+          
+          // Invalidate all chart caches and fetch fresh data immediately
+          invalidateAllChartCaches();
+          requestWsData(chartTimeframe, 1000); // Force refresh + bulk prefetch
+        }).catch(error => {
+          console.error("[useTokenDashboard] Error in post-trade refresh:", error);
+          // Still try to fetch fresh chart data even if other refreshes fail
+          invalidateAllChartCaches();
+          requestWsData(chartTimeframe, 1000);
+        });
       } else {
         console.error(
           "[useTokenDashboard] Sell transaction failed or receipt not received/failed.",
@@ -1359,5 +1320,11 @@ export function useTokenDashboard(
     clearSuccessMessage,
     clearErrorMessage,
     calculateMaxBuyableAmount,
+    refreshServerCache,
+    // WebSocket specific
+    wsConnected,
+    wsError,
+    reconnectWs,
+    lastTradeData
   };
 }
