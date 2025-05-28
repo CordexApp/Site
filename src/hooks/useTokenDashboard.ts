@@ -1,41 +1,42 @@
 import { ERC20Abi } from "@/abis/ERC20";
 import { TIMEFRAME_ORDER } from "@/config";
 import {
-    approveTokens,
-    buyTokens,
-    calculatePrice,
-    findBondingCurveForProviderToken,
-    getAccumulatedFees,
-    getCordexTokenAddress,
-    getCurrentPrice,
-    getMaxSellableAmount,
-    getSellPayoutEstimate,
-    getTokenAllowance,
-    getTokenSupply,
-    sellTokens,
+  approveTokens,
+  buyTokens,
+  calculatePrice,
+  findBondingCurveForProviderToken,
+  getAccumulatedFees,
+  getCordexTokenAddress,
+  getCurrentPrice,
+  getMaxSellableAmount,
+  getSellPayoutEstimate,
+  getTokenAllowance,
+  getTokenSupply,
+  sellTokens,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import {
-    getCoinContractAddressFast,
-    getOHLCVDataFast,
-    OHLCVCandle,
-    refreshCacheForCurve
+  getCoinContractAddressFast,
+  getOHLCVDataFast,
+  OHLCVCandle,
+  refreshCacheForCurve
 } from "@/services/tradingDataService";
+import { parseWalletError } from "@/utils/walletErrorUtils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Abi,
-    decodeEventLog,
-    formatEther,
-    Log,
-    maxUint256,
-    parseAbiItem,
-    parseEther,
+  Abi,
+  decodeEventLog,
+  formatEther,
+  Log,
+  maxUint256,
+  parseAbiItem,
+  parseEther,
 } from "viem";
 import {
-    useAccount,
-    usePublicClient,
-    useWatchContractEvent,
-    useWriteContract,
+  useAccount,
+  usePublicClient,
+  useWatchContractEvent,
+  useWriteContract,
 } from "wagmi";
 import { useWebSocketChart } from './useWebSocketChart';
 
@@ -1239,7 +1240,18 @@ export function useTokenDashboard(
       }
     } catch (err) {
       console.error("[useTokenDashboard] Error approving Cordex tokens:", err);
-      setError("failed to approve cordex tokens");
+      
+      // Parse the error to provide better user feedback
+      const walletError = parseWalletError(err);
+      
+      if (walletError.isUserRejection) {
+        console.log('User cancelled approval:', walletError.message);
+        // For cancellations, don't set persistent error - just log it
+        setError(null);
+      } else {
+        setError(walletError.message);
+      }
+      
       setSuccessInfo(null);
     } finally {
       setBuyState((prev) => ({ ...prev, isApproving: false }));
@@ -1309,7 +1321,18 @@ export function useTokenDashboard(
         "[useTokenDashboard] Error approving provider tokens:",
         err
       );
-      setError("failed to approve provider tokens");
+      
+      // Parse the error to provide better user feedback
+      const walletError = parseWalletError(err);
+      
+      if (walletError.isUserRejection) {
+        console.log('User cancelled approval:', walletError.message);
+        // For cancellations, don't set persistent error - just log it
+        setError(null);
+      } else {
+        setError(walletError.message);
+      }
+      
       setSuccessInfo(null);
     } finally {
       setSellState((prev) => ({ ...prev, isApproving: false }));
@@ -1400,7 +1423,18 @@ export function useTokenDashboard(
       }
     } catch (err) {
       console.error("[useTokenDashboard] Error buying tokens:", err);
-      setError("failed to buy tokens");
+      
+      // Parse the error to provide better user feedback
+      const walletError = parseWalletError(err);
+      
+      if (walletError.isUserRejection) {
+        console.log('User cancelled buy transaction:', walletError.message);
+        // For cancellations, don't set persistent error - just log it
+        setError(null);
+      } else {
+        setError(walletError.message);
+      }
+      
       setSuccessInfo(null);
     } finally {
       setBuyState((prev) => ({ ...prev, isProcessing: false }));
@@ -1492,7 +1526,18 @@ export function useTokenDashboard(
       }
     } catch (err) {
       console.error("[useTokenDashboard] Error selling tokens:", err);
-      setError("failed to sell tokens");
+      
+      // Parse the error to provide better user feedback
+      const walletError = parseWalletError(err);
+      
+      if (walletError.isUserRejection) {
+        console.log('User cancelled sell transaction:', walletError.message);
+        // For cancellations, don't set persistent error - just log it
+        setError(null);
+      } else {
+        setError(walletError.message);
+      }
+      
       setSuccessInfo(null);
     } finally {
       setSellState((prev) => ({ ...prev, isProcessing: false }));

@@ -5,9 +5,10 @@ import { ProviderContractAbi } from '@/abis/ProviderContract';
 import ProviderTokenABI from '@/abis/ProviderToken.json';
 import { useWeb3 } from '@/hooks/useWeb3';
 import { createService } from '@/services/servicesService';
+import { parseWalletError } from '@/utils/walletErrorUtils';
 import { ethers } from 'ethers';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { Alert } from './ui/Alert';
 import { Card } from './ui/Card';
@@ -38,6 +39,9 @@ export function LaunchServiceFlow() {
   const { provider, address, signer } = useWeb3();
   const { address: walletAddress } = useAccount();
   
+  // Ref for scrolling to error message
+  const errorRef = useRef<HTMLDivElement>(null);
+  
   // Form fields
   const [serviceName, setServiceName] = useState('');
   const [serviceDescription, setServiceDescription] = useState('');
@@ -45,7 +49,7 @@ export function LaunchServiceFlow() {
   const [tokenSymbol, setTokenSymbol] = useState('');
   const [apiEndpoint, setApiEndpoint] = useState('');
   const [maxEscrow, setMaxEscrow] = useState('1');
-  const [tokenPercentage, setTokenPercentage] = useState(20); // Default 20% of tokens to bonding curve
+  const [tokenPercentage, setTokenPercentage] = useState(90); // Default 85% of tokens to bonding curve
   const [deployBondingCurve, setDeployBondingCurve] = useState(true); // New state for bonding curve toggle
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -79,6 +83,15 @@ export function LaunchServiceFlow() {
       if (!serviceName || !apiEndpoint || !tokenName || !tokenSymbol) {
         setError('Please fill all required fields');
         setCurrentStep('input');
+        
+        // Scroll to error message so user can see it immediately
+        setTimeout(() => {
+          errorRef.current?.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }, 100);
+        
         return;
       }
       
@@ -231,7 +244,41 @@ export function LaunchServiceFlow() {
       
     } catch (error: unknown) {
       console.error('Deployment error:', error);
-      setError(error instanceof Error ? error.message : 'Failed to deploy service');
+      
+      // Parse the error to provide better user feedback
+      const walletError = parseWalletError(error);
+      
+      if (walletError.isUserRejection) {
+        // For user cancellations, show a friendlier message and don't set persistent error
+        console.log('User cancelled transaction:', walletError.message);
+        setError(walletError.message);
+        
+        // Scroll to error message
+        setTimeout(() => {
+          errorRef.current?.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }, 100);
+        
+        // Clear the error after a short delay for cancellations
+        setTimeout(() => {
+          setError(null);
+        }, 3000);
+      } else {
+        // For other errors, show the full error message
+        setError(walletError.message);
+        
+        // Scroll to error message
+        setTimeout(() => {
+          errorRef.current?.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }, 100);
+      }
+      
+      // Preserve deployment progress
       if (deployedProviderContractAddress) setProviderContractAddress(deployedProviderContractAddress);
       if (deployedTokenAddress) setProviderTokenAddress(deployedTokenAddress);
       if (deployedBondingCurveAddress) setBondingCurveAddress(deployedBondingCurveAddress);
@@ -277,7 +324,7 @@ export function LaunchServiceFlow() {
       </h2>
       
       {error && (
-        <Alert variant="destructive" className="mb-4">
+        <Alert ref={errorRef} variant="destructive" className="mb-4">
           {error}
         </Alert>
       )}
@@ -392,7 +439,7 @@ export function LaunchServiceFlow() {
                     id="deployBondingCurve"
                     checked={deployBondingCurve}
                     onChange={(e) => setDeployBondingCurve(e.target.checked)}
-                    className="h-4 w-4 bg-black/50 border-gray-600 rounded focus:ring-white"
+                    className="h-4 w-4 bg-black/50 border-gray-600 rounded focus:ring-green-400 accent-green-400"
                   />
                   <label htmlFor="deployBondingCurve" className="text-gray-300">
                     Deploy bonding curve (enables token trading)

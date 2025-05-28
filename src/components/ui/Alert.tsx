@@ -6,12 +6,12 @@ interface AlertProps {
   className?: string;
 }
 
-export const Alert: React.FC<AlertProps> = ({
+export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(({
   children,
   variant = 'default',
   className = "",
   ...props
-}) => {
+}, ref) => {
   const variantStyles = {
     default: "bg-blue-100 text-blue-800 border-blue-200",
     success: "bg-green-100 text-green-800 border-green-200",
@@ -21,6 +21,7 @@ export const Alert: React.FC<AlertProps> = ({
   
   return (
     <div
+      ref={ref}
       className={`p-4 rounded-md border ${variantStyles[variant]} ${className}`}
       role="alert"
       {...props}
@@ -28,4 +29,6 @@ export const Alert: React.FC<AlertProps> = ({
       {children}
     </div>
   );
-}; 
+});
+
+Alert.displayName = "Alert"; 
