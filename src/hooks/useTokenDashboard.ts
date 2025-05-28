@@ -1,43 +1,56 @@
 import { ERC20Abi } from "@/abis/ERC20";
 import { TIMEFRAME_ORDER } from "@/config";
 import {
-    approveTokens,
-    buyTokens,
-    calculatePrice,
-    findBondingCurveForProviderToken,
-    getAccumulatedFees,
-    getCordexTokenAddress,
-    getCurrentPrice,
-    getMaxSellableAmount,
-    getSellPayoutEstimate,
-    getTokenAllowance,
-    getTokenSupply,
-    sellTokens,
+  approveTokens,
+  buyTokens,
+  calculatePrice,
+  findBondingCurveForProviderToken,
+  getAccumulatedFees,
+  getCordexTokenAddress,
+  getCurrentPrice,
+  getMaxSellableAmount,
+  getSellPayoutEstimate,
+  getTokenAllowance,
+  getTokenSupply,
+  sellTokens,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import {
-    getCoinContractAddressFast,
-    getOHLCVDataFast,
-    OHLCVCandle,
-    refreshCacheForCurve
+  getCoinContractAddressFast,
+  getOHLCVDataFast,
+  OHLCVCandle,
+  refreshCacheForCurve
 } from "@/services/tradingDataService";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Abi,
-    decodeEventLog,
-    formatEther,
-    Log,
-    maxUint256,
-    parseAbiItem,
-    parseEther,
+  Abi,
+  decodeEventLog,
+  formatEther,
+  Log,
+  maxUint256,
+  parseAbiItem,
+  parseEther,
 } from "viem";
 import {
-    useAccount,
-    usePublicClient,
-    useWatchContractEvent,
-    useWriteContract,
+  useAccount,
+  usePublicClient,
+  useWatchContractEvent,
+  useWriteContract,
 } from "wagmi";
 import { useWebSocketChart } from './useWebSocketChart';
+
+// Constants for chart display ranges
+const DISPLAY_RANGE_ORDER = ["15m", "1h", "4h", "1d", "7d", "30d", "all"];
+const DISPLAY_RANGE_DURATIONS: Record<string, number> = { // in milliseconds
+  "15m": 15 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+  "4h": 4 * 60 * 60 * 1000,
+  "1d": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+  // "all" will be handled by a default candle count or max available
+};
+const DEFAULT_ALL_TIME_CANDLE_COUNT = 2000; // Max candles to fetch for "all time"
 
 // Types (Ensure these are defined or imported correctly)
 export interface TokenInfo {
@@ -80,6 +93,37 @@ export function useTokenDashboard(
 ) {
   const fetchChartDataEnabled = options?.fetchChartDataEnabled !== false;
   const initialCoinContractAddress = options?.initialCoinContractAddress;
+
+  // Helper function to get timeframe duration in milliseconds
+  const getTimeframeDurationMs = (timeframe: string): number => {
+    if (timeframe.endsWith('m')) {
+      return parseInt(timeframe.slice(0, -1)) * 60 * 1000;
+    } else if (timeframe.endsWith('h')) {
+      return parseInt(timeframe.slice(0, -1)) * 60 * 60 * 1000;
+    } else if (timeframe.endsWith('d')) {
+      return parseInt(timeframe.slice(0, -1)) * 24 * 60 * 60 * 1000;
+    }
+    return 0;
+  };
+
+  // Helper function to filter available display ranges based on current timeframe
+  const getValidDisplayRanges = (currentTimeframe: string): string[] => {
+    const timeframeDurationMs = getTimeframeDurationMs(currentTimeframe);
+    if (timeframeDurationMs === 0) {
+      // If we can't parse the timeframe, return all ranges
+      return [...DISPLAY_RANGE_ORDER];
+    }
+
+    return DISPLAY_RANGE_ORDER.filter(range => {
+      if (range === "all") return true; // "all" is always valid
+      
+      const rangeDurationMs = DISPLAY_RANGE_DURATIONS[range];
+      if (!rangeDurationMs) return false;
+      
+      // Only allow display ranges that are equal to or longer than the timeframe
+      return rangeDurationMs >= timeframeDurationMs;
+    });
+  };
 
   const [ownerAddress, setOwnerAddress] = useState<`0x${string}` | null>(null);
   const [bondingCurveAddress, setBondingCurveAddress] = useState<
@@ -130,11 +174,33 @@ export function useTokenDashboard(
   const [availableTimeframes, setAvailableTimeframes] = useState<string[]>(
     [...TIMEFRAME_ORDER]
   );
+  // New state for chart display range
+  const [chartDisplayRange, setChartDisplayRange] = useState<string>("1d"); // Default to 1 day
+  const chartDisplayRangeRef = useRef(chartDisplayRange);
+  const [availableDisplayRanges, setAvailableDisplayRanges] = useState<string[]>(
+    [...DISPLAY_RANGE_ORDER] // Initialize with all ranges, will be filtered in useEffect
+  );
   
-  // Effect to keep ref synchronized with state
+  // Effect to keep refs synchronized with state
   useEffect(() => {
     chartTimeframeRef.current = chartTimeframe;
   }, [chartTimeframe]);
+
+  useEffect(() => {
+    chartDisplayRangeRef.current = chartDisplayRange;
+  }, [chartDisplayRange]);
+
+  // Effect to update available display ranges when timeframe changes
+  useEffect(() => {
+    const validRanges = getValidDisplayRanges(chartTimeframe);
+    setAvailableDisplayRanges(validRanges);
+
+    // If current display range is no longer valid, switch to a valid one
+    if (!validRanges.includes(chartDisplayRange)) {
+      console.log(`[useTokenDashboard] Current display range ${chartDisplayRange} is invalid for timeframe ${chartTimeframe}, switching to ${validRanges[0]}`);
+      setChartDisplayRange(validRanges[0]); // Use the first valid range
+    }
+  }, [chartTimeframe]); // Remove chartDisplayRange from dependencies to avoid infinite loop
   
   // Add caching for chart data with aggressive TTL strategy for real-time updates
   const chartDataCache = useRef<Record<string, { data: OHLCVCandle[], timestamp: number }>>({});
@@ -166,6 +232,45 @@ export function useTokenDashboard(
 
   // Function to clear error message
   const clearErrorMessage = () => setError(null);
+
+  // Helper function to calculate candle count based on timeframe and display range
+  const calculateCandleCount = (timeframe: string, displayRange: string): number => {
+    console.log(`[calculateCandleCount] Called with timeframe: ${timeframe}, displayRange: ${displayRange}`);
+
+    if (displayRange === "all") {
+      console.log(`[calculateCandleCount] Display range is "all", returning ${DEFAULT_ALL_TIME_CANDLE_COUNT} candles`);
+      return DEFAULT_ALL_TIME_CANDLE_COUNT;
+    }
+    
+    let actualTimeframeDurationMs = 0;
+    if (timeframe.endsWith('m')) {
+        actualTimeframeDurationMs = parseInt(timeframe.slice(0, -1)) * 60 * 1000;
+    } else if (timeframe.endsWith('h')) {
+        actualTimeframeDurationMs = parseInt(timeframe.slice(0, -1)) * 60 * 60 * 1000;
+    } else if (timeframe.endsWith('d')) {
+        actualTimeframeDurationMs = parseInt(timeframe.slice(0, -1)) * 24 * 60 * 60 * 1000;
+    }
+
+    if (actualTimeframeDurationMs === 0) { 
+        console.warn(`[calculateCandleCount] Could not parse timeframe: ${timeframe}, defaulting to 200 candles`);
+        return 200; 
+    }
+
+    const rangeDurationMs = DISPLAY_RANGE_DURATIONS[displayRange];
+    if (!rangeDurationMs) { 
+      console.warn(`[calculateCandleCount] Unknown displayRange: ${displayRange}, defaulting to ${DEFAULT_ALL_TIME_CANDLE_COUNT} candles`);
+      return DEFAULT_ALL_TIME_CANDLE_COUNT; 
+    }
+
+    console.log(`[calculateCandleCount] rangeDurationMs: ${rangeDurationMs}, actualTimeframeDurationMs: ${actualTimeframeDurationMs}`);
+
+    const idealCandleCount = Math.ceil(rangeDurationMs / actualTimeframeDurationMs);
+    // Ensure at least 1 candle is requested, and cap at DEFAULT_ALL_TIME_CANDLE_COUNT
+    const finalCandleCount = Math.max(1, Math.min(DEFAULT_ALL_TIME_CANDLE_COUNT, idealCandleCount));
+    
+    console.log(`[calculateCandleCount] idealCandleCount: ${idealCandleCount}, finalCandleCount: ${finalCandleCount}`);
+    return finalCandleCount;
+  };
 
   // Function to calculate max buyable amount (called only when needed)
   const calculateMaxBuyableAmount = async (): Promise<string> => {
@@ -569,16 +674,22 @@ export function useTokenDashboard(
   // Memoize callback functions to prevent infinite re-renders
   const onChartUpdate = useCallback((data: any, tradeData?: any) => {
     const updateStart = Date.now();
-    console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Received real-time chart update (state TF: ${chartTimeframe})`);
+    console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Received real-time chart update (state TF: ${chartTimeframeRef.current})`);
     
     const activeTimeframeForUpdate = chartTimeframeRef.current; // Use the latest value from the ref
+    const activeDisplayRange = chartDisplayRangeRef.current; // Use the latest value from the ref
 
     // Update chart data with the current timeframe from ref
     if (data[activeTimeframeForUpdate]) {
       const chartUpdateStart = Date.now();
-      setChartData(data[activeTimeframeForUpdate].candles);
+      const allCandles = data[activeTimeframeForUpdate].candles as OHLCVCandle[];
+      const expectedCount = calculateCandleCount(activeTimeframeForUpdate, activeDisplayRange);
+      
+      const candlesToDisplay = allCandles.slice(-expectedCount).sort((a, b) => a.time - b.time);
+      
+      setChartData(candlesToDisplay);
       const chartUpdateTime = Date.now() - chartUpdateStart;
-      console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Chart data updated for ${activeTimeframeForUpdate} (${data[activeTimeframeForUpdate].candles.length} candles) in ${chartUpdateTime}ms`);
+      console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Chart data updated for ${activeTimeframeForUpdate} / ${activeDisplayRange}. Received ${allCandles.length}, Displaying last ${candlesToDisplay.length} (expected ${expectedCount}) in ${chartUpdateTime}ms`);
     }
     
     // If there's trade data, it means a new trade occurred
@@ -620,30 +731,69 @@ export function useTokenDashboard(
 
   // Handle timeframe changes with WebSocket
   const handleTimeframeChange = (newTimeframe: string) => {
-    console.log(`[useTokenDashboard] Timeframe change: ${chartTimeframe} -> ${newTimeframe}`);
-    setChartTimeframe(newTimeframe);
+    console.log(`[useTokenDashboard] Timeframe change: ${chartTimeframeRef.current} -> ${newTimeframe}`);
+    setChartTimeframe(newTimeframe); // This will update chartTimeframeRef via its own useEffect
+
+    const currentDR = chartDisplayRangeRef.current;
+    const candleCount = calculateCandleCount(newTimeframe, currentDR);
     
-    // Update chart data immediately if we have WebSocket data
+    // Update chart data immediately if we have WebSocket data for the new timeframe
     if (wsChartData && wsChartData[newTimeframe]) {
-      setChartData(wsChartData[newTimeframe].candles);
+      const allCandles = wsChartData[newTimeframe].candles as OHLCVCandle[];
+      
+      // Take the last candleCount candles (most recent) and ensure they are in ascending order
+      const candlesToDisplay = allCandles.slice(-candleCount).sort((a, b) => a.time - b.time);
+      
+      console.log(`[useTokenDashboard] handleTimeframeChange: Setting chartData with ${candlesToDisplay.length} candles for ${newTimeframe}/${currentDR}.`);
+      setChartData(candlesToDisplay);
     } else {
       // Request data for the new timeframe via WebSocket
+      console.log(`[useTokenDashboard] handleTimeframeChange: Requesting ${candleCount} candles for ${newTimeframe} / ${currentDR} via WebSocket.`);
       setChartData([]); // Clear existing data while new data is fetched
-      requestWsData(newTimeframe, 1000);
+      requestWsData(newTimeframe, candleCount);
     }
+  };
+
+  // New handler for display range changes
+  const handleDisplayRangeChange = (newDisplayRange: string) => {
+    console.log(`[useTokenDashboard] Display range change: ${chartDisplayRangeRef.current} -> ${newDisplayRange}`);
+    setChartDisplayRange(newDisplayRange); // This will update chartDisplayRangeRef via its own useEffect
+
+    const currentTF = chartTimeframeRef.current;
+    const candleCount = calculateCandleCount(currentTF, newDisplayRange);
+    console.log(`[useTokenDashboard] handleDisplayRangeChange: Requesting ${candleCount} candles for ${currentTF} / ${newDisplayRange} via WebSocket.`);
+    setChartData([]); // Clear existing data
+    requestWsData(currentTF, candleCount);
   };
 
   // Fallback to HTTP polling if WebSocket fails
   const fetchChartDataHTTP = async (timeframe: string) => {
-    if (!bondingCurveAddress) return;
+    if (!bondingCurveAddress) {
+      setChartData([]);
+      return;
+    }
+    
+    const currentDisplayRange = chartDisplayRangeRef.current;
+    const candleCountToRequest = calculateCandleCount(timeframe, currentDisplayRange);
+    console.log(`[fetchChartDataHTTP] Requesting ${candleCountToRequest} candles for ${timeframe} / ${currentDisplayRange} via HTTP.`);
     
     try {
-      const response = await getOHLCVDataFast(bondingCurveAddress, timeframe, 1000);
-      if (response.candles.length > 0) {
-        setChartData(response.candles);
+      // Assuming getOHLCVDataFast respects candleCountToRequest for "latest N" or returns enough data to slice
+      const response = await getOHLCVDataFast(bondingCurveAddress, timeframe, candleCountToRequest);
+      const allCandles = response.candles as OHLCVCandle[];
+      // Always slice to ensure we only use the latest N, conforming to the displayRange intention
+      const candlesToDisplay = allCandles.slice(-candleCountToRequest);
+      
+      if (candlesToDisplay.length > 0) {
+        console.log(`[fetchChartDataHTTP] Received ${allCandles.length} candles, displaying last ${candlesToDisplay.length} for ${timeframe} / ${currentDisplayRange}`);
+        setChartData(candlesToDisplay);
+      } else {
+        console.log(`[fetchChartDataHTTP] Received 0 displayable candles for ${timeframe} / ${currentDisplayRange}`);
+        setChartData([]);
       }
     } catch (error) {
       console.error('[useTokenDashboard] HTTP fallback failed:', error);
+      setChartData([]);
     }
   };
 
@@ -651,29 +801,40 @@ export function useTokenDashboard(
   useEffect(() => {
     if (fetchChartDataEnabled && bondingCurveAddress && !wsConnected && wsError) {
       console.log('[useTokenDashboard] WebSocket failed, using HTTP fallback');
-      fetchChartDataHTTP(chartTimeframe);
+      fetchChartDataHTTP(chartTimeframeRef.current); // Use ref for current timeframe
     }
-  }, [fetchChartDataEnabled, bondingCurveAddress, wsConnected, wsError, chartTimeframe]);
+  }, [fetchChartDataEnabled, bondingCurveAddress, wsConnected, wsError, chartTimeframeRef.current]); // Ensure ref is dependency if its value matters for triggering
 
-  // Initial chart data load when bonding curve address changes
+  // Initial chart data load when bondingCurveAddress changes or WebSocket connects
   useEffect(() => {
     if (fetchChartDataEnabled && bondingCurveAddress && wsConnected) {
-      // Request initial data for current timeframe
-      requestWsData(chartTimeframe, 1000);
+      const currentTF = chartTimeframeRef.current;
+      const currentDR = chartDisplayRangeRef.current;
+      const candleCount = calculateCandleCount(currentTF, currentDR);
+      console.log(`[useTokenDashboard] Initial chart data load: Requesting ${candleCount} candles for ${currentTF} / ${currentDR} via WebSocket.`);
+      requestWsData(currentTF, candleCount);
     }
-  }, [fetchChartDataEnabled, bondingCurveAddress, wsConnected, chartTimeframe]);
+  }, [fetchChartDataEnabled, bondingCurveAddress, wsConnected]); // Removed chartTimeframe, chartDisplayRange, rely on refs inside
 
   // Effect to update main chartData when wsChartData (from WebSocket hook) has new data for the current timeframe
   useEffect(() => {
-    // chartTimeframe is the state representing the user's selected timeframe.
-    // wsChartData is the object from useWebSocketChart holding potentially multiple timeframes' data.
-    if (wsChartData && wsChartData[chartTimeframe]) {
-      console.log(`[useTokenDashboard] useEffect[wsChartData, chartTimeframe]: Populating chartData for ${chartTimeframe} from wsChartData.`);
-      setChartData(wsChartData[chartTimeframe].candles);
+    const currentTF = chartTimeframeRef.current;
+    const currentDR = chartDisplayRangeRef.current;
+
+    if (wsChartData && wsChartData[currentTF]) {
+      const allCandles = wsChartData[currentTF].candles as OHLCVCandle[];
+      const expectedCount = calculateCandleCount(currentTF, currentDR);
+      
+      console.log(`[useTokenDashboard] useEffect[wsChartData]: Setting chartData for ${currentTF}/${currentDR}. Received ${allCandles.length}, displaying ${expectedCount} candles.`);
+      
+      // Take the last expectedCount candles (most recent) and ensure they are in ascending order
+      const candlesToDisplay = allCandles.slice(-expectedCount).sort((a, b) => a.time - b.time);
+      
+      setChartData(candlesToDisplay);
+    } else if (wsChartData && !wsChartData[currentTF]) {
+      console.log(`[useTokenDashboard] useEffect[wsChartData]: wsChartData present, but no data for current timeframe ${currentTF}. Waiting for fetch.`);
     }
-    // If wsChartData doesn't have data for the current chartTimeframe (e.g., after setChartData([])
-    // in handleTimeframeChange pending a fetch), this effect does nothing until wsChartData updates.
-  }, [wsChartData, chartTimeframe]);
+  }, [wsChartData, chartTimeframeRef, chartDisplayRangeRef]);
 
   // Define the event ABI item string for parsing
   const tradeActivityEventAbi = parseAbiItem(
@@ -914,12 +1075,20 @@ export function useTokenDashboard(
                 
                 // Invalidate all cached chart data and fetch fresh data immediately
                 invalidateAllChartCaches();
-                requestWsData(chartTimeframe, 1000); // Force refresh + bulk prefetch
+                const currentTF = chartTimeframeRef.current;
+                const currentDR = chartDisplayRangeRef.current;
+                const candleCount = calculateCandleCount(currentTF, currentDR);
+                console.log(`[useTokenDashboard] Post-event: Requesting ${candleCount} candles for ${currentTF} / ${currentDR} via WebSocket.`);
+                requestWsData(currentTF, candleCount); 
               }).catch(error => {
                 console.error("[useTokenDashboard] Error in event refresh:", error);
                 // Still try to fetch fresh chart data
                 invalidateAllChartCaches();
-                requestWsData(chartTimeframe, 1000);
+                const currentTF = chartTimeframeRef.current;
+                const currentDR = chartDisplayRangeRef.current;
+                const candleCount = calculateCandleCount(currentTF, currentDR);
+                console.log(`[useTokenDashboard] Post-event (error path): Requesting ${candleCount} candles for ${currentTF} / ${currentDR} via WebSocket.`);
+                requestWsData(currentTF, candleCount);
               });
             } else {
               console.error(
@@ -1206,12 +1375,20 @@ export function useTokenDashboard(
           
           // Invalidate all chart caches and fetch fresh data immediately
           invalidateAllChartCaches();
-          requestWsData(chartTimeframe, 1000); // Force refresh + bulk prefetch
+          const currentTF = chartTimeframeRef.current;
+          const currentDR = chartDisplayRangeRef.current;
+          const candleCount = calculateCandleCount(currentTF, currentDR);
+          console.log(`[useTokenDashboard] Post-buy: Requesting ${candleCount} candles for ${currentTF} / ${currentDR} via WebSocket.`);
+          requestWsData(currentTF, candleCount); 
         }).catch(error => {
           console.error("[useTokenDashboard] Error in post-trade refresh:", error);
           // Still try to fetch fresh chart data even if other refreshes fail
           invalidateAllChartCaches();
-          requestWsData(chartTimeframe, 1000);
+          const currentTF = chartTimeframeRef.current;
+          const currentDR = chartDisplayRangeRef.current;
+          const candleCount = calculateCandleCount(currentTF, currentDR);
+          console.log(`[useTokenDashboard] Post-buy (error path): Requesting ${candleCount} candles for ${currentTF} / ${currentDR} via WebSocket.`);
+          requestWsData(currentTF, candleCount);
         });
       } else {
         console.error(
@@ -1290,12 +1467,20 @@ export function useTokenDashboard(
           
           // Invalidate all chart caches and fetch fresh data immediately
           invalidateAllChartCaches();
-          requestWsData(chartTimeframe, 1000); // Force refresh + bulk prefetch
+          const currentTF = chartTimeframeRef.current;
+          const currentDR = chartDisplayRangeRef.current;
+          const candleCount = calculateCandleCount(currentTF, currentDR);
+          console.log(`[useTokenDashboard] Post-sell: Requesting ${candleCount} candles for ${currentTF} / ${currentDR} via WebSocket.`);
+          requestWsData(currentTF, candleCount); 
         }).catch(error => {
           console.error("[useTokenDashboard] Error in post-trade refresh:", error);
           // Still try to fetch fresh chart data even if other refreshes fail
           invalidateAllChartCaches();
-          requestWsData(chartTimeframe, 1000);
+          const currentTF = chartTimeframeRef.current;
+          const currentDR = chartDisplayRangeRef.current;
+          const candleCount = calculateCandleCount(currentTF, currentDR);
+          console.log(`[useTokenDashboard] Post-sell (error path): Requesting ${candleCount} candles for ${currentTF} / ${currentDR} via WebSocket.`);
+          requestWsData(currentTF, candleCount);
         });
       } else {
         console.error(
@@ -1342,6 +1527,10 @@ export function useTokenDashboard(
     clearErrorMessage,
     calculateMaxBuyableAmount,
     refreshServerCache,
+    // New chart display range properties
+    chartDisplayRange,
+    availableDisplayRanges,
+    handleDisplayRangeChange,
     // WebSocket specific
     wsConnected,
     wsError,

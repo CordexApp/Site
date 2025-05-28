@@ -31,6 +31,10 @@ export default function TokenDashboard({
     chartData,
     chartTimeframe,
     availableTimeframes,
+    // New chart display range properties from the hook
+    chartDisplayRange,
+    availableDisplayRanges,
+    handleDisplayRangeChange,
     // Tab state
     activeTab,
     setActiveTab,
@@ -45,8 +49,12 @@ export default function TokenDashboard({
     clearSuccessMessage,
     clearErrorMessage,
     calculateMaxBuyableAmount,
+    // WebSocket state
+    wsConnected,
+    reconnectWs,
   } = useTokenDashboard(providerContractAddress, {
     initialCoinContractAddress: coinContractAddress,
+    fetchChartDataEnabled: true, // Ensure chart data fetching is enabled
   });
 
   if (isLoading) {
@@ -119,6 +127,10 @@ export default function TokenDashboard({
               onTimeframeChange={handleTimeframeChange}
               availableTimeframes={availableTimeframes}
               symbol={tokenInfo.symbol || "token"}
+              // Pass new props for display range
+              displayRange={chartDisplayRange}
+              onDisplayRangeChange={handleDisplayRangeChange}
+              availableDisplayRanges={availableDisplayRanges}
             />
           </div>
 

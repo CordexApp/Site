@@ -19,7 +19,20 @@ interface PriceChartProps {
   onTimeframeChange?: (timeframe: string) => void;
   availableTimeframes?: string[];
   symbol?: string;
+  displayRange?: string;
+  onDisplayRangeChange?: (displayRange: string) => void;
+  availableDisplayRanges?: string[];
 }
+
+const DISPLAY_RANGE_LABELS: Record<string, string> = {
+  "15m": "15M",
+  "1h": "1H",
+  "4h": "4H",
+  "1d": "1D",
+  "7d": "7D",
+  "30d": "30D",
+  "all": "All",
+};
 
 export default function PriceChart({
   data,
@@ -27,6 +40,9 @@ export default function PriceChart({
   onTimeframeChange,
   availableTimeframes = [...TIMEFRAME_ORDER],
   symbol = "Token",
+  displayRange,
+  onDisplayRangeChange,
+  availableDisplayRanges = Object.keys(DISPLAY_RANGE_LABELS),
 }: PriceChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -35,6 +51,7 @@ export default function PriceChart({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [lastTimeframeChange, setLastTimeframeChange] = useState<number>(0);
   const userInitiatedChangeRef = useRef(false);
+  const [lastDisplayRangeChange, setLastDisplayRangeChange] = useState<number>(0);
 
   // Set up chart only once - no longer depends on timeframe
   useEffect(() => {
@@ -98,19 +115,6 @@ export default function PriceChart({
     };
   }, []); // Only create chart once
 
-  // Update timeScale options when timeframe changes
-  useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.applyOptions({
-        timeScale: {
-          borderColor: "#334155",
-          timeVisible: true,
-          secondsVisible: timeframe === "1m" || timeframe === "5m",
-        },
-      });
-    }
-  }, [timeframe]);
-
   // Update chart data when data prop changes
   useEffect(() => {
     const series = seriesRef.current;
@@ -144,6 +148,42 @@ export default function PriceChart({
       // Additional check: if the new data contains most of the previous data, it's incremental
       newChartData.length >= lastAppliedData.length;
 
+    // Helper function to configure timeScale with fixed edges
+    const configureTimeScaleWithFixedEdges = (chartData: CandlestickData[]) => {
+      if (chartData.length === 0) return;
+      
+      const firstTime = chartData[0].time as number;
+      const lastTime = chartData[chartData.length - 1].time as number;
+      
+      // Calculate a small padding (about 1% of the data range on each side)
+      const timeRange = lastTime - firstTime;
+      const padding = Math.max(timeRange * 0.01, 30); // Minimum 30 seconds padding
+      
+      console.log("[PriceChart] Configuring fixed edges with data range:", {
+        firstTime: new Date(firstTime * 1000).toLocaleTimeString(),
+        lastTime: new Date(lastTime * 1000).toLocaleTimeString(),
+        padding,
+        fixedEdges: true
+      });
+      
+      // Configure timeScale with fixed edges to prevent scrolling beyond data
+      chart.applyOptions({
+        timeScale: {
+          borderColor: "#334155",
+          timeVisible: true,
+          secondsVisible: timeframe === "1m" || timeframe === "5m",
+          fixLeftEdge: true,
+          fixRightEdge: true,
+        },
+      });
+
+      // Set the visible range within the fixed boundaries
+      chart.timeScale().setVisibleRange({
+        from: (firstTime - padding) as UTCTimestamp,
+        to: (lastTime + padding) as UTCTimestamp
+      });
+    };
+
     if (isIncrementalUpdate) {
       // Check if the update is just appending or replacing the last candle
       const newLastCandle = newChartData[newChartData.length - 1];
@@ -159,7 +199,9 @@ export default function PriceChart({
         console.log("[PriceChart] Appending new candle:", newLastCandle);
         series.update(newLastCandle);
         lastAppliedDataRef.current.push(newLastCandle);
-        chart.timeScale().scrollToRealTime();
+        
+        // Reconfigure with new data boundaries
+        configureTimeScaleWithFixedEdges(lastAppliedDataRef.current);
       }
       setIsTransitioning(false);
     } else {
@@ -175,7 +217,7 @@ export default function PriceChart({
         setTimeout(() => {
           series.setData(newChartData);
           lastAppliedDataRef.current = newChartData;
-          chart.timeScale().fitContent();
+          configureTimeScaleWithFixedEdges(newChartData);
           setIsTransitioning(false);
           userInitiatedChangeRef.current = false; // Reset flag after transition
         }, 50);
@@ -183,7 +225,7 @@ export default function PriceChart({
         // Initial load or automatic data update - no transition needed
         series.setData(newChartData);
         lastAppliedDataRef.current = newChartData;
-        chart.timeScale().fitContent();
+        configureTimeScaleWithFixedEdges(newChartData);
         setIsTransitioning(false);
         userInitiatedChangeRef.current = false; // Reset flag
       }
@@ -193,6 +235,10 @@ export default function PriceChart({
   // Format display text for timeframe
   const formatTimeframe = (tf: string) => {
     return TIMEFRAME_LABELS[tf] || tf;
+  };
+
+  const formatDisplayRange = (dr: string) => {
+    return DISPLAY_RANGE_LABELS[dr] || dr;
   };
 
   // Enhanced timeframe change handler with visual feedback and cooldown
@@ -208,6 +254,21 @@ export default function PriceChart({
     setIsTransitioning(true);
     if (onTimeframeChange) {
       onTimeframeChange(tf);
+    }
+  };
+
+  // Handler for display range changes
+  const handleDisplayRangeClick = (dr: string) => {
+    if (displayRange && dr === displayRange) return;
+
+    const now = Date.now();
+    if (now - lastDisplayRangeChange < 200) return; // 200ms cooldown
+
+    setLastDisplayRangeChange(now);
+    userInitiatedChangeRef.current = true; // Mark as user-initiated change (might affect transitions)
+    setIsTransitioning(true); // Use existing transitioning state for visual feedback
+    if (onDisplayRangeChange) {
+      onDisplayRangeChange(dr);
     }
   };
 
@@ -237,6 +298,32 @@ export default function PriceChart({
           ))}
         </div>
       </div>
+      
+      {/* New row for Display Range Buttons */}
+      {displayRange && onDisplayRangeChange && availableDisplayRanges && (
+         <div className="flex justify-end items-center mb-2">
+           <div className="flex space-x-1">
+            {availableDisplayRanges.map((dr) => (
+              <button
+                key={dr}
+                onClick={() => handleDisplayRangeClick(dr)}
+                disabled={isTransitioning}
+                className={`px-2 py-1 text-xs hover:border-white cursor-pointer transition-all duration-200 ${
+                  displayRange === dr
+                    ? "border-1 border-white text-white"
+                    : "border-1 border-gray-700 text-white"
+                } ${
+                  isTransitioning
+                    ? "cursor-not-allowed opacity-50"
+                    : ""
+                }`}
+              >
+                {formatDisplayRange(dr)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div 
         ref={chartContainerRef} 
