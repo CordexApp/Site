@@ -1,41 +1,41 @@
 import { ERC20Abi } from "@/abis/ERC20";
 import { TIMEFRAME_ORDER } from "@/config";
 import {
-  approveTokens,
-  buyTokens,
-  calculatePrice,
-  findBondingCurveForProviderToken,
-  getAccumulatedFees,
-  getCordexTokenAddress,
-  getCurrentPrice,
-  getMaxSellableAmount,
-  getSellPayoutEstimate,
-  getTokenAllowance,
-  getTokenSupply,
-  sellTokens,
+    approveTokens,
+    buyTokens,
+    calculatePrice,
+    findBondingCurveForProviderToken,
+    getAccumulatedFees,
+    getCordexTokenAddress,
+    getCurrentPrice,
+    getMaxSellableAmount,
+    getSellPayoutEstimate,
+    getTokenAllowance,
+    getTokenSupply,
+    sellTokens,
 } from "@/services/bondingCurveServices";
 import { getContractProvider } from "@/services/contractServices";
 import {
-  getCoinContractAddressFast,
-  getOHLCVDataFast,
-  OHLCVCandle,
-  refreshCacheForCurve
+    getCoinContractAddressFast,
+    getOHLCVDataFast,
+    OHLCVCandle,
+    refreshCacheForCurve
 } from "@/services/tradingDataService";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Abi,
-  decodeEventLog,
-  formatEther,
-  Log,
-  maxUint256,
-  parseAbiItem,
-  parseEther,
+    Abi,
+    decodeEventLog,
+    formatEther,
+    Log,
+    maxUint256,
+    parseAbiItem,
+    parseEther,
 } from "viem";
 import {
-  useAccount,
-  usePublicClient,
-  useWatchContractEvent,
-  useWriteContract,
+    useAccount,
+    usePublicClient,
+    useWatchContractEvent,
+    useWriteContract,
 } from "wagmi";
 import { useWebSocketChart } from './useWebSocketChart';
 
@@ -126,9 +126,15 @@ export function useTokenDashboard(
   // Chart state
   const [chartData, setChartData] = useState<OHLCVCandle[]>([]);
   const [chartTimeframe, setChartTimeframe] = useState<string>("1m");
+  const chartTimeframeRef = useRef(chartTimeframe); // Ref for the current timeframe
   const [availableTimeframes, setAvailableTimeframes] = useState<string[]>(
     [...TIMEFRAME_ORDER]
   );
+  
+  // Effect to keep ref synchronized with state
+  useEffect(() => {
+    chartTimeframeRef.current = chartTimeframe;
+  }, [chartTimeframe]);
   
   // Add caching for chart data with aggressive TTL strategy for real-time updates
   const chartDataCache = useRef<Record<string, { data: OHLCVCandle[], timestamp: number }>>({});
@@ -563,14 +569,16 @@ export function useTokenDashboard(
   // Memoize callback functions to prevent infinite re-renders
   const onChartUpdate = useCallback((data: any, tradeData?: any) => {
     const updateStart = Date.now();
-    console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Received real-time chart update`);
+    console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Received real-time chart update (state TF: ${chartTimeframe})`);
     
-    // Update chart data with the current timeframe
-    if (data[chartTimeframe]) {
+    const activeTimeframeForUpdate = chartTimeframeRef.current; // Use the latest value from the ref
+
+    // Update chart data with the current timeframe from ref
+    if (data[activeTimeframeForUpdate]) {
       const chartUpdateStart = Date.now();
-      setChartData(data[chartTimeframe].candles);
+      setChartData(data[activeTimeframeForUpdate].candles);
       const chartUpdateTime = Date.now() - chartUpdateStart;
-      console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Chart data updated for ${chartTimeframe} (${data[chartTimeframe].candles.length} candles) in ${chartUpdateTime}ms`);
+      console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] Chart data updated for ${activeTimeframeForUpdate} (${data[activeTimeframeForUpdate].candles.length} candles) in ${chartUpdateTime}ms`);
     }
     
     // If there's trade data, it means a new trade occurred
@@ -589,7 +597,7 @@ export function useTokenDashboard(
     
     const totalUpdateTime = Date.now() - updateStart;
     console.log(`[useTokenDashboard] [${new Date().toLocaleTimeString()}.${Date.now() % 1000}] TOTAL chart update callback completed in ${totalUpdateTime}ms`);
-  }, [chartTimeframe, walletAddress, refreshBondingCurveInfo, refreshTokenBalance]);
+  }, [walletAddress, refreshBondingCurveInfo, refreshTokenBalance]);
 
   const onConnectionStatusChange = useCallback((connected: boolean) => {
     console.log(`[useTokenDashboard] WebSocket connection: ${connected ? 'connected' : 'disconnected'}`);
@@ -620,6 +628,7 @@ export function useTokenDashboard(
       setChartData(wsChartData[newTimeframe].candles);
     } else {
       // Request data for the new timeframe via WebSocket
+      setChartData([]); // Clear existing data while new data is fetched
       requestWsData(newTimeframe, 1000);
     }
   };
@@ -653,6 +662,18 @@ export function useTokenDashboard(
       requestWsData(chartTimeframe, 1000);
     }
   }, [fetchChartDataEnabled, bondingCurveAddress, wsConnected, chartTimeframe]);
+
+  // Effect to update main chartData when wsChartData (from WebSocket hook) has new data for the current timeframe
+  useEffect(() => {
+    // chartTimeframe is the state representing the user's selected timeframe.
+    // wsChartData is the object from useWebSocketChart holding potentially multiple timeframes' data.
+    if (wsChartData && wsChartData[chartTimeframe]) {
+      console.log(`[useTokenDashboard] useEffect[wsChartData, chartTimeframe]: Populating chartData for ${chartTimeframe} from wsChartData.`);
+      setChartData(wsChartData[chartTimeframe].candles);
+    }
+    // If wsChartData doesn't have data for the current chartTimeframe (e.g., after setChartData([])
+    // in handleTimeframeChange pending a fetch), this effect does nothing until wsChartData updates.
+  }, [wsChartData, chartTimeframe]);
 
   // Define the event ABI item string for parsing
   const tradeActivityEventAbi = parseAbiItem(

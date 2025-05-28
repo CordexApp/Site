@@ -188,7 +188,7 @@ export default function PriceChart({
         userInitiatedChangeRef.current = false; // Reset flag
       }
     }
-  }, [data]);
+  }, [data, timeframe]);
 
   // Format display text for timeframe
   const formatTimeframe = (tf: string) => {
@@ -251,7 +251,7 @@ export default function PriceChart({
         )}
         {isTransitioning && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="bg-black bg-opacity-50 px-3 py-1 rounded text-xs text-white">
+            <div className="bg-black px-3 py-1 rounded text-xs text-white">
               Loading {formatTimeframe(timeframe)}...
             </div>
           </div>
