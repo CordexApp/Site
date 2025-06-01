@@ -259,7 +259,7 @@ export default function TokenHolders({ tokenAddress, tokenSymbol, bondingCurveAd
         <div className="text-gray-500 text-center py-4">
           <div className="text-sm">No token holders found.</div>
           <div className="text-xs mt-1">
-            This token may have no transfers yet, or Blockscout may not have indexed it.
+            This token may may not have been indexed yet.
           </div>
           <button
             onClick={handleRefresh}
@@ -275,6 +275,10 @@ export default function TokenHolders({ tokenAddress, tokenSymbol, bondingCurveAd
           <div className="text-xs text-gray-500 mb-2 flex items-center justify-between">
             <span>{holdersData.length} holders</span>
             <span className="text-xs">Live data</span>
+          </div>
+          
+          <div className="text-xs text-yellow-300 mb-2 px-2 py-1 bg-yellow-900/10 rounded border border-yellow-800/50">
+            Token balances may have indexing delays and might not reflect the most recent transactions
           </div>
           
           <div className="space-y-1 max-h-64 overflow-y-auto">
