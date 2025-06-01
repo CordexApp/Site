@@ -1,16 +1,16 @@
 import {
-  deployProviderContract,
-  extractContractAddressFromReceipt,
-  getProviderContractAddress,
-  setContractActive
+    deployProviderContract,
+    extractContractAddressFromReceipt,
+    getProviderContractAddress,
+    setContractActive
 } from "@/services/contractServices";
 import { createService } from "@/services/servicesService";
 import { useEffect, useState } from "react";
 import {
-  useAccount,
-  usePublicClient,
-  useWaitForTransactionReceipt,
-  useWriteContract,
+    useAccount,
+    usePublicClient,
+    useWaitForTransactionReceipt,
+    useWriteContract,
 } from "wagmi";
 
 export default function useServiceDeployment() {
@@ -37,6 +37,9 @@ export default function useServiceDeployment() {
     name: string;
     endpoint: string;
     imageUrl: string | null;
+    website?: string;
+    socialMedia?: string;
+    documentation?: string;
   } | null>(null);
 
   // Flag to track if registration has been done
@@ -101,7 +104,10 @@ export default function useServiceDeployment() {
     apiEndpoint: string,
     imageUrl: string | null,
     providerContractAddress: string,
-    coinContractAddress?: string
+    coinContractAddress?: string,
+    website?: string,
+    socialMedia?: string,
+    documentation?: string
   ) => {
     try {
       console.log("Starting service registration with contracts:", {
@@ -124,6 +130,9 @@ export default function useServiceDeployment() {
         name: serviceName,
         endpoint: apiEndpoint,
         image: imageUrl || undefined,
+        website: website || undefined,
+        social_media: socialMedia || undefined,
+        documentation: documentation || undefined,
         provider_contract_address: providerContractAddress,
         coin_contract_address: coinContractAddress,
         owner_wallet_address: connectedWalletAddress,
@@ -150,6 +159,9 @@ export default function useServiceDeployment() {
     tokenName: string;
     tokenSymbol: string;
     imageUrl: string | null;
+    website?: string;
+    socialMedia?: string;
+    documentation?: string;
   }) => {
     setCurrentAction("deploy");
     setDeploymentStatus("idle");
@@ -163,6 +175,9 @@ export default function useServiceDeployment() {
       name: params.serviceName,
       endpoint: params.apiEndpoint,
       imageUrl: params.imageUrl,
+      website: params.website,
+      socialMedia: params.socialMedia,
+      documentation: params.documentation,
     });
 
     console.log("Initiating contract deployment with parameters:", {
@@ -306,7 +321,10 @@ export default function useServiceDeployment() {
             serviceDetails.endpoint,
             serviceDetails.imageUrl,
             contractAddresses.providerContract,
-            contractAddresses.coinContract
+            contractAddresses.coinContract,
+            serviceDetails.website,
+            serviceDetails.socialMedia,
+            serviceDetails.documentation
           );
 
           console.log("Service auto-registration complete");

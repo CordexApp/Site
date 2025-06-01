@@ -16,6 +16,12 @@ export default function ServiceForm() {
     setTokenName,
     tokenSymbol,
     setTokenSymbol,
+    website,
+    setWebsite,
+    socialMedia,
+    setSocialMedia,
+    documentation,
+    setDocumentation,
     imagePreview,
     handleImageSelect,
     handleSubmit,
@@ -53,6 +59,33 @@ export default function ServiceForm() {
         onImageSelected={handleImageSelect}
         imagePreview={imagePreview}
         label="service image"
+        disabled={!isConnected}
+      />
+
+      <Input
+        label="website (optional)"
+        type="url"
+        value={website}
+        onChange={(e) => setWebsite(e.target.value)}
+        placeholder="https://myservice.com"
+        disabled={!isConnected}
+      />
+
+      <Input
+        label="social media (optional)"
+        type="url"
+        value={socialMedia}
+        onChange={(e) => setSocialMedia(e.target.value)}
+        placeholder="https://twitter.com/myservice"
+        disabled={!isConnected}
+      />
+
+      <Input
+        label="documentation (optional)"
+        type="url"
+        value={documentation}
+        onChange={(e) => setDocumentation(e.target.value)}
+        placeholder="https://docs.myservice.com"
         disabled={!isConnected}
       />
 

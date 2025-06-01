@@ -1,15 +1,15 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  ReactNode,
-  useState,
-  useCallback,
-  FormEvent,
-} from "react";
 import useImageUpload from "@/hooks/useImageUpload";
 import useServiceDeployment from "@/hooks/useServiceDeployment";
+import {
+    createContext,
+    FormEvent,
+    ReactNode,
+    useCallback,
+    useContext,
+    useState,
+} from "react";
 
 interface ServiceLaunchContextType {
   // Form state
@@ -23,6 +23,12 @@ interface ServiceLaunchContextType {
   setTokenName: (value: string) => void;
   tokenSymbol: string;
   setTokenSymbol: (value: string) => void;
+  website: string;
+  setWebsite: (value: string) => void;
+  socialMedia: string;
+  setSocialMedia: (value: string) => void;
+  documentation: string;
+  setDocumentation: (value: string) => void;
 
   // Image handling
   imageFile: File | null;
@@ -59,6 +65,9 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
   const [maxEscrow, setMaxEscrow] = useState("");
   const [tokenName, setTokenName] = useState("");
   const [tokenSymbol, setTokenSymbol] = useState("");
+  const [website, setWebsite] = useState("");
+  const [socialMedia, setSocialMedia] = useState("");
+  const [documentation, setDocumentation] = useState("");
 
   // Custom hooks
   const {
@@ -92,6 +101,9 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
         maxEscrow,
         tokenName,
         tokenSymbol,
+        website,
+        socialMedia,
+        documentation,
         hasImage: !!imageFile,
       });
 
@@ -124,6 +136,9 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
         tokenName,
         tokenSymbol,
         imageUrl,
+        website: website || undefined,
+        socialMedia: socialMedia || undefined,
+        documentation: documentation || undefined,
       });
     },
     [
@@ -132,6 +147,9 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
       maxEscrow,
       tokenName,
       tokenSymbol,
+      website,
+      socialMedia,
+      documentation,
       imageFile,
       uploadedImageUrl,
       uploadImageToS3,
@@ -151,6 +169,12 @@ export function ServiceLaunchProvider({ children }: { children: ReactNode }) {
     setTokenName,
     tokenSymbol,
     setTokenSymbol,
+    website,
+    setWebsite,
+    socialMedia,
+    setSocialMedia,
+    documentation,
+    setDocumentation,
 
     // Image handling
     imageFile,

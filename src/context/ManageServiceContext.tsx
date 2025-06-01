@@ -5,7 +5,7 @@ import { getBondingCurveContract } from "@/services/bondingCurveServices";
 import {
     checkContractActive,
     getContractMaxEscrow,
-    getContractProvider,
+    getContractProvider
 } from "@/services/contractServices";
 import { getServiceByContractAddress } from "@/services/servicesService";
 import { Service } from "@/types/service";
@@ -115,58 +115,52 @@ export function ManageServiceProvider({
 
       setProviderContractDetails({
         isActive,
-        maxEscrow,
+        maxEscrow: maxEscrow || undefined,
         apiEndpoint,
       });
 
       // Get service from database
       const serviceData = await getServiceByContractAddress(serviceAddress);
+      console.log("[ManageServiceContext] Service data from database:", serviceData);
       if (serviceData) {
         setService(serviceData);
       }
 
-      // Get provider token address
-      try {
-        const tokenAddress = await publicClient.readContract({
-          address: serviceAddress,
-          abi: [
-            {
-              inputs: [],
-              name: "tokenAddress",
-              outputs: [{ name: "", type: "address" }],
-              stateMutability: "view",
-              type: "function",
-            },
-          ],
-          functionName: "tokenAddress",
-        }) as `0x${string}`;
+      // Get service token address from database (coin_contract_address)
+      console.log("[ManageServiceContext] Checking for coin_contract_address:", serviceData?.coin_contract_address);
+      
+      if (serviceData?.coin_contract_address) {
+        try {
+          console.log("[ManageServiceContext] Using coin_contract_address from database:", serviceData.coin_contract_address);
+          const serviceTokenAddress = serviceData.coin_contract_address as `0x${string}`;
+          setProviderTokenAddress(serviceTokenAddress);
 
-        if (tokenAddress !== "0x0000000000000000000000000000000000000000") {
-          setProviderTokenAddress(tokenAddress);
-
-          // Get token info
+          // Get token info for the service token
+          console.log("[ManageServiceContext] Fetching token details for service token:", serviceTokenAddress);
           const [name, symbol, decimals, totalSupply] = await Promise.all([
             publicClient.readContract({
-              address: tokenAddress,
+              address: serviceTokenAddress,
               abi: ERC20Abi,
               functionName: "name",
             }),
             publicClient.readContract({
-              address: tokenAddress,
+              address: serviceTokenAddress,
               abi: ERC20Abi,
               functionName: "symbol",
             }),
             publicClient.readContract({
-              address: tokenAddress,
+              address: serviceTokenAddress,
               abi: ERC20Abi,
               functionName: "decimals",
             }),
             publicClient.readContract({
-              address: tokenAddress,
+              address: serviceTokenAddress,
               abi: ERC20Abi,
               functionName: "totalSupply",
             }),
           ]);
+
+          console.log("[ManageServiceContext] Service token info:", { name, symbol, decimals, totalSupply });
 
           setProviderTokenInfo({
             name: name as string,
@@ -174,9 +168,82 @@ export function ManageServiceProvider({
             decimals: decimals as number,
             totalSupply: (totalSupply as bigint).toString(),
           });
+        } catch (e) {
+          console.error("Error fetching service token info:", e);
+          // Fallback to database service name
+          if (serviceData?.name) {
+            console.log("[ManageServiceContext] Falling back to service name from database:", serviceData.name);
+            setProviderTokenInfo({
+              name: `${serviceData.name} Token`,
+              symbol: serviceData.name.substring(0, 4).toUpperCase(),
+              decimals: 18,
+              totalSupply: "1000000",
+            });
+          }
         }
-      } catch (e) {
-        console.error("Error fetching token info:", e);
+      } else {
+        console.log("[ManageServiceContext] No coin_contract_address found in database");
+        // If no coin_contract_address but we have service data, still try to get the provider token from factory
+        if (provider && serviceData) {
+          console.log("[ManageServiceContext] Attempting to get provider token from factory as fallback");
+          try {
+            const providerServiceTokenAddress = await publicClient.readContract({
+              address: contractConfig.address,
+              abi: ContractFactoryAbi,
+              functionName: "getProviderToken",
+              args: [provider],
+            }) as `0x${string}`;
+
+            console.log("[ManageServiceContext] Provider service token address from factory:", providerServiceTokenAddress);
+
+            if (providerServiceTokenAddress !== "0x0000000000000000000000000000000000000000") {
+              setProviderTokenAddress(providerServiceTokenAddress);
+
+              const [name, symbol, decimals, totalSupply] = await Promise.all([
+                publicClient.readContract({
+                  address: providerServiceTokenAddress,
+                  abi: ERC20Abi,
+                  functionName: "name",
+                }),
+                publicClient.readContract({
+                  address: providerServiceTokenAddress,
+                  abi: ERC20Abi,
+                  functionName: "symbol",
+                }),
+                publicClient.readContract({
+                  address: providerServiceTokenAddress,
+                  abi: ERC20Abi,
+                  functionName: "decimals",
+                }),
+                publicClient.readContract({
+                  address: providerServiceTokenAddress,
+                  abi: ERC20Abi,
+                  functionName: "totalSupply",
+                }),
+              ]);
+
+              setProviderTokenInfo({
+                name: name as string,
+                symbol: symbol as string,
+                decimals: decimals as number,
+                totalSupply: (totalSupply as bigint).toString(),
+              });
+            }
+          } catch (e) {
+            console.error("Error fetching provider token from factory:", e);
+          }
+        }
+        
+        // Fallback to database service name if we have it
+        if (serviceData?.name) {
+          console.log("[ManageServiceContext] Setting fallback token info using service name:", serviceData.name);
+          setProviderTokenInfo({
+            name: `${serviceData.name} Token`,
+            symbol: serviceData.name.substring(0, 4).toUpperCase(),
+            decimals: 18,
+            totalSupply: "1000000",
+          });
+        }
       }
 
       // Get bonding curve address

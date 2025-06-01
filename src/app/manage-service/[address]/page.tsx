@@ -1,6 +1,5 @@
 "use client";
 
-import BondingCurveSetup from "@/components/BondingCurveSetup";
 import ContractActivation from "@/components/ContractActivation";
 import ContractStatusIndicator from "@/components/ContractStatusIndicator";
 import ServiceHealthIndicator from "@/components/ServiceHealthIndicator";
@@ -37,12 +36,12 @@ function ManageServiceContent() {
   console.log("[ManageServiceContent] Bonding curve address:", bondingCurveAddress);
   console.log("[ManageServiceContent] Is owner:", isOwner);
   console.log("[ManageServiceContent] Provider token address:", providerTokenAddress);
-  console.log("[ManageServiceContent] Should show bonding curve setup:", !bondingCurveAddress && isOwner && providerTokenAddress);
+  console.log("[ManageServiceContent] Provider token info:", providerTokenInfo);
+  console.log("[ManageServiceContent] Service:", service);
+  console.log("[ManageServiceContent] Provider contract details:", providerContractDetails);
 
-  // Format maxEscrow from bigint to a readable string
-  const escrowAmount = providerContractDetails?.maxEscrow
-    ? (Number(providerContractDetails.maxEscrow) / 10 ** 18).toString()
-    : null;
+  // The maxEscrow value is already formatted correctly by getContractMaxEscrow
+  const escrowAmount = providerContractDetails?.maxEscrow || null;
 
   if (isLoading) {
     return (
@@ -136,14 +135,6 @@ function ManageServiceContent() {
         
         {/* Contract Activation - always show */}
         <ContractActivation />
-        
-        {/* Bonding Curve Setup - only show if no bonding curve exists and user is owner */}
-        {/* This is a strict check: only render if there is explicitly no bonding curve */}
-        {bondingCurveAddress === null && isOwner && providerTokenAddress && (
-          <div className="mt-4">
-            <BondingCurveSetup />
-          </div>
-        )}
       </div>
     </div>
   );

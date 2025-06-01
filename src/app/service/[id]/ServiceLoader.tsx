@@ -9,8 +9,8 @@ import { SecondaryButton } from "@/components/ui/SecondaryButton";
 import { TypedText } from "@/components/ui/TypedText";
 import { ServiceProvider } from "@/context/ServiceContext";
 import {
-  getServiceByContractAddress,
-  getServiceById,
+    getServiceByContractAddress,
+    getServiceById,
 } from "@/services/servicesService";
 import { Service } from "@/types/service";
 import Image from "next/image";
@@ -20,6 +20,17 @@ import { isAddress } from "viem";
 interface ServiceLoaderProps {
   id: string;
 }
+
+// Helper function to ensure URLs have proper protocol
+const ensureProtocol = (url: string): string => {
+  if (!url) return url;
+  // If URL already has a protocol, return as is
+  if (url.match(/^https?:\/\//)) {
+    return url;
+  }
+  // Default to https for external links
+  return `https://${url}`;
+};
 
 export default function ServiceLoader({ id }: ServiceLoaderProps) {
   const [service, setService] = useState<Service | null>(null);
@@ -75,6 +86,9 @@ export default function ServiceLoader({ id }: ServiceLoaderProps) {
           console.log("[ServiceLoader] Service found for ID", id, ":", fetchedService);
           console.log("[ServiceLoader] Description:", fetchedService.description);
           console.log("[ServiceLoader] Image URL:", fetchedService.image);
+          console.log("[ServiceLoader] Website:", fetchedService.website);
+          console.log("[ServiceLoader] Social Media:", fetchedService.social_media);
+          console.log("[ServiceLoader] Documentation:", fetchedService.documentation);
           
           setService(fetchedService);
           setLoading(false);
@@ -240,6 +254,45 @@ export default function ServiceLoader({ id }: ServiceLoaderProps) {
             ) : !loading && !service?.description && (
               <div className="text-gray-500 mb-6 mt-2 text-sm italic">
                 No description available
+              </div>
+            )}
+
+            {/* Display service links if available */}
+            {!loading && (service?.website || service?.social_media || service?.documentation) && (
+              <div className="text-gray-300 mb-6 max-w-3xl">
+                <h3 className="text-gray-400 text-sm mb-3">Links</h3>
+                <div className="flex flex-wrap gap-3">
+                  {service.website && (
+                    <a 
+                      href={ensureProtocol(service.website)} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-3 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-sm text-white transition-colors"
+                    >
+                      🌐 Website
+                    </a>
+                  )}
+                  {service.social_media && (
+                    <a 
+                      href={ensureProtocol(service.social_media)} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-3 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-sm text-white transition-colors"
+                    >
+                      📱 Social
+                    </a>
+                  )}
+                  {service.documentation && (
+                    <a 
+                      href={ensureProtocol(service.documentation)} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-3 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-sm text-white transition-colors"
+                    >
+                      📚 Docs
+                    </a>
+                  )}
+                </div>
               </div>
             )}
 

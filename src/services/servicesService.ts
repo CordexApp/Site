@@ -20,6 +20,9 @@ interface CreateServiceRequest {
   endpoint: string;
   description?: string;
   image?: string;
+  website?: string;
+  social_media?: string;
+  documentation?: string;
   provider_contract_address?: string;
   coin_contract_address?: string;
   bonding_curve_address?: string;
@@ -32,6 +35,9 @@ interface UpdateServiceRequest {
   endpoint?: string;
   description?: string;
   image?: string;
+  website?: string;
+  social_media?: string;
+  documentation?: string;
   provider_contract_address?: string;
   coin_contract_address?: string;
   bonding_curve_address?: string;

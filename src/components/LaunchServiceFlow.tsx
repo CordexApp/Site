@@ -45,6 +45,9 @@ export function LaunchServiceFlow() {
   // Form fields
   const [serviceName, setServiceName] = useState('');
   const [serviceDescription, setServiceDescription] = useState('');
+  const [website, setWebsite] = useState('');
+  const [socialMedia, setSocialMedia] = useState('');
+  const [documentation, setDocumentation] = useState('');
   const [tokenName, setTokenName] = useState('');
   const [tokenSymbol, setTokenSymbol] = useState('');
   const [apiEndpoint, setApiEndpoint] = useState('');
@@ -224,6 +227,9 @@ export function LaunchServiceFlow() {
       const serviceToCreate = {
         name: serviceName,
         description: serviceDescription, // Include description field
+        website: website || undefined,
+        social_media: socialMedia || undefined,
+        documentation: documentation || undefined,
         endpoint: apiEndpoint,
         provider_contract_address: deployedProviderContractAddress,
         coin_contract_address: deployedTokenAddress,
@@ -352,6 +358,39 @@ export function LaunchServiceFlow() {
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setServiceDescription(e.target.value)}
                     placeholder="Describe what your service does..."
                     rows={3}
+                    className="bg-black/50 border-gray-600"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-gray-300 mb-1">Website (Optional)</label>
+                  <Input 
+                    value={website} 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWebsite(e.target.value)}
+                    placeholder="https://myservice.com"
+                    type="url"
+                    className="bg-black/50 border-gray-600"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-gray-300 mb-1">Social Media (Optional)</label>
+                  <Input 
+                    value={socialMedia} 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSocialMedia(e.target.value)}
+                    placeholder="https://twitter.com/myservice"
+                    type="url"
+                    className="bg-black/50 border-gray-600"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-gray-300 mb-1">Documentation (Optional)</label>
+                  <Input 
+                    value={documentation} 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDocumentation(e.target.value)}
+                    placeholder="https://docs.myservice.com"
+                    type="url"
                     className="bg-black/50 border-gray-600"
                   />
                 </div>
