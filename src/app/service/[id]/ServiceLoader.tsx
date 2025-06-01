@@ -4,13 +4,14 @@ import ContractStatusIndicator from "@/components/ContractStatusIndicator";
 import ServiceHealthIndicator from "@/components/ServiceHealthIndicator";
 import ServiceRequestFormWrapper from "@/components/ServiceRequestFormWrapper";
 import TokenDashboard from "@/components/TokenDashboard";
+import TokenHolders from "@/components/TokenHolders";
 import { LoadingDots } from "@/components/ui/LoadingDots";
 import { SecondaryButton } from "@/components/ui/SecondaryButton";
 import { TypedText } from "@/components/ui/TypedText";
 import { ServiceProvider } from "@/context/ServiceContext";
 import {
-    getServiceByContractAddress,
-    getServiceById,
+  getServiceByContractAddress,
+  getServiceById,
 } from "@/services/servicesService";
 import { Service } from "@/types/service";
 import Image from "next/image";
@@ -175,6 +176,7 @@ export default function ServiceLoader({ id }: ServiceLoaderProps) {
   const endpoint = service?.endpoint || "";
   const contractAddress = service?.provider_contract_address || "";
   const coinAddress = service?.coin_contract_address || null;
+  const bondingCurveAddress = service?.bonding_curve_address || null;
 
   console.log("[ServiceLoader] About to render. States:", {
     id,
@@ -183,6 +185,8 @@ export default function ServiceLoader({ id }: ServiceLoaderProps) {
     serviceExists: !!service,
     endpoint,
     contractAddress,
+    coinAddress,
+    bondingCurveAddress,
     fetchedServiceContent: service
   });
 
@@ -279,7 +283,7 @@ export default function ServiceLoader({ id }: ServiceLoaderProps) {
                       rel="noopener noreferrer"
                       className="inline-flex items-center px-3 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-sm text-white transition-colors"
                     >
-                      📱 Social
+                      𝕏 X (formerly Twitter)
                     </a>
                   )}
                   {service.documentation && (
@@ -358,6 +362,21 @@ export default function ServiceLoader({ id }: ServiceLoaderProps) {
             <TokenDashboard
               providerContractAddress={contractAddress as `0x${string}`}
               coinContractAddress={coinAddress as (`0x${string}` | null)}
+            />
+            {/* Debug logging for TokenHolders props */}
+            {(() => {
+              console.log("[ServiceLoader] Passing to TokenHolders:", {
+                tokenAddress: coinAddress,
+                bondingCurveAddress: bondingCurveAddress,
+                providerContractAddress: contractAddress,
+                coinContractAddress: coinAddress
+              });
+              return null;
+            })()}
+            <TokenHolders
+              tokenAddress={coinAddress as (`0x${string}` | null)}
+              tokenSymbol={undefined}
+              bondingCurveAddress={bondingCurveAddress as (`0x${string}` | null)}
             />
           </div>
         )}

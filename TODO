@@ -1,15 +1,17 @@
 Complete:
 better metamask error integration
 my services page (should check services in db that correspond to your wallet address)
+more documentation for services (website link, documentation etc, twitter)
+
 
 
 TODO:
 search through marketplace
-more documentation for services (website link, documentation etc, twitter)
 show wallets owning tokens
 show revenue metrics and trade volume
 smart contract refactoring (remove withdraw, revenue split, add fee, exponential curve and more)
 INFURA RPC needs to be kept in check
+how it works page
 
 
 add option to show regular graph to charts
