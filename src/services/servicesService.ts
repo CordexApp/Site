@@ -47,7 +47,8 @@ interface UpdateServiceRequest {
 export async function getServicesByOwnerOrAll(
   ownerWalletAddress?: string,
   limit?: number,
-  offset?: number
+  offset?: number,
+  searchQuery?: string
 ): Promise<PaginatedServicesResponse> {
   // const now = Date.now();
   // const cacheKey = ownerWalletAddress || 'all'; 
@@ -61,7 +62,9 @@ export async function getServicesByOwnerOrAll(
   
   try {
     let apiUrl = new URL(`${API_URL}/services`);
-    if (ownerWalletAddress) {
+    if (searchQuery) {
+      apiUrl.searchParams.append('search', searchQuery);
+    } else if (ownerWalletAddress) {
       apiUrl.searchParams.append('owner_wallet_address', ownerWalletAddress);
     }
     if (limit !== undefined) {

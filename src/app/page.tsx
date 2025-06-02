@@ -1,18 +1,25 @@
-import ServiceList from "@/components/ServiceList";
-import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import MarketplaceContent from "@/components/MarketplaceContent";
+import ServiceSearchWrapper from "@/components/ServiceSearchWrapper";
 import { TypedText } from "@/components/ui/TypedText";
 import { getServicesByOwnerOrAll } from "@/services/servicesService";
 import { Service } from "@/types/service";
 
 const INITIAL_PAGE_LIMIT = 12;
 
-export default async function Home() {
-  // Fetch initial services (first page)
-  const initialData = await getServicesByOwnerOrAll(undefined, INITIAL_PAGE_LIMIT, 0);
+interface HomeProps {
+  searchParams: Promise<{ search?: string }>;
+}
+
+export default async function Home({ searchParams }: HomeProps) {
+  const resolvedParams = await searchParams;
+  const searchQuery = resolvedParams.search || '';
+  
+  // Fetch initial services (first page) with search query if provided
+  const initialData = await getServicesByOwnerOrAll(undefined, INITIAL_PAGE_LIMIT, 0, searchQuery);
   const initialServices: Service[] = initialData.services;
   const totalServices = initialData.total_count;
   
-  console.log(`[ServerPage] Initial services fetched: ${initialServices.length} of ${totalServices}`);
+  console.log(`[ServerPage] Initial services fetched: ${initialServices.length} of ${totalServices}${searchQuery ? ` (search: "${searchQuery}")` : ''}`);
 
   return (
     <div className="container mx-auto py-8 px-4 text-white">
@@ -20,12 +27,23 @@ export default async function Home() {
         <TypedText text="Monetize Your Service in Minutes" />
       </h1>
       <p className="text-lg text-gray-400 mb-8">Build an API service. List it. Earn.</p>
-      <div className="flex gap-4 mb-12">
-        <PrimaryButton href="/launch">Launch a Service</PrimaryButton>
+      
+      {/* Search Bar */}
+      <div className="mb-12">
+        <ServiceSearchWrapper 
+          placeholder="Search services by name, description, or website..."
+          className="max-w-2xl"
+          initialQuery={searchQuery}
+          debounceMs={600}
+        />
       </div>
 
-      <h2 className="text-2xl font-semibold mt-10 mb-6">Available Services</h2>
-      <ServiceList initialServices={initialServices} totalServices={totalServices} initialLimit={INITIAL_PAGE_LIMIT} />
+      <MarketplaceContent
+        initialServices={initialServices}
+        totalServices={totalServices}
+        initialLimit={INITIAL_PAGE_LIMIT}
+        searchQuery={searchQuery}
+      />
     </div>
   );
 }

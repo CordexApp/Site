@@ -1,5 +1,6 @@
 "use client";
 
+import { SortDirection, SortOption } from "@/components/SortButton";
 import { Grid } from "@/components/ui/Grid";
 import { Service } from "@/types/service";
 import { fetchAndCalculateMarketCap } from "@/utils/marketCapUtils";
@@ -11,6 +12,11 @@ interface ServiceListProps {
   initialServices: Service[];
   totalServices: number;
   initialLimit: number;
+  searchQuery?: string;
+  onSearchResults?: (services: Service[], totalCount: number) => void;
+  currentSort: SortOption;
+  currentDirection: SortDirection;
+  onMarketCapLoadingChange?: (loading: boolean) => void;
 }
 
 // Increased polling interval to 10 minutes (was 5 min)
@@ -53,41 +59,119 @@ function throttle<T extends (...args: any[]) => any>(
   };
 }
 
-export default function ServiceList({ initialServices, totalServices, initialLimit }: ServiceListProps) {
+export default function ServiceList({ initialServices, totalServices, initialLimit, searchQuery, onSearchResults, currentSort, currentDirection, onMarketCapLoadingChange }: ServiceListProps) {
   const [allLoadedServices, setAllLoadedServices] = useState<Service[]>(initialServices);
   const [currentOffset, setCurrentOffset] = useState<number>(initialServices.length);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [errorLoadingMore, setErrorLoadingMore] = useState<string | null>(null);
   
-  const [loadingMarketCaps, setLoadingMarketCaps] = useState(true);
+  const [loadingMarketCaps, setLoadingMarketCaps] = useState(false);
   const [lastPollingTime, setLastPollingTime] = useState<number>(0);
   const publicClient: any = useMemo(() => getPublicClient(), []);
 
   // Update local services state if initialServices prop changes
+  // Preserve existing market cap data when possible
   useEffect(() => {
-    setAllLoadedServices(initialServices);
+    setAllLoadedServices(prevServices => {
+      // Create a map of existing services with market cap data
+      const existingServicesMap = new Map(
+        prevServices.map(service => [service.id, service])
+      );
+      
+      // Merge initial services with existing market cap data
+      const mergedServices = initialServices.map(initialService => {
+        const existingService = existingServicesMap.get(initialService.id);
+        if (existingService && existingService.marketCap !== undefined) {
+          // Preserve market cap data from existing service
+          return {
+            ...initialService,
+            marketCap: existingService.marketCap,
+            tokenPriceInCordex: existingService.tokenPriceInCordex,
+            tokenTotalSupply: existingService.tokenTotalSupply,
+            actualProviderTokenAddress: existingService.actualProviderTokenAddress,
+            tokenDecimals: existingService.tokenDecimals
+          };
+        }
+        return initialService;
+      });
+      
+      return mergedServices;
+    });
     setCurrentOffset(initialServices.length); // Reset offset when initial services change
   }, [initialServices]);
 
-  const fetchMarketCapsForServiceList = useCallback(
+  // Function to sort services based on current sort option and direction
+  const sortServices = useCallback((services: Service[], sortBy: SortOption, direction: SortDirection): Service[] => {
+    const sorted = [...services];
+    
+    switch (sortBy) {
+      case "alphabetical":
+        return sorted.sort((a, b) => {
+          const comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+          return direction === "asc" ? comparison : -comparison;
+        });
+      
+      case "dateadded":
+        return sorted.sort((a, b) => {
+          const comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          return direction === "asc" ? comparison : -comparison;
+        });
+      
+      case "marketcap":
+        return sorted.sort((a, b) => {
+          const aMarketCap = a.marketCap ? parseFloat(a.marketCap) : 0;
+          const bMarketCap = b.marketCap ? parseFloat(b.marketCap) : 0;
+          
+          // If both have no market cap, sort alphabetically as fallback
+          if (aMarketCap === 0 && bMarketCap === 0) {
+            return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+          }
+          
+          const comparison = aMarketCap - bMarketCap;
+          return direction === "asc" ? comparison : -comparison;
+        });
+      
+      default:
+        return sorted;
+    }
+  }, []);
+
+  // Get sorted services for display
+  const sortedServices = useMemo(() => {
+    return sortServices(allLoadedServices, currentSort, currentDirection);
+  }, [allLoadedServices, currentSort, currentDirection, sortServices]);
+
+  // Notify parent about loading state changes
+  useEffect(() => {
+    onMarketCapLoadingChange?.(loadingMarketCaps);
+  }, [loadingMarketCaps, onMarketCapLoadingChange]);
+
+  const fetchMarketCapsForServices = useCallback(
     async (servicesToUpdate: Service[]) => {
       if (!publicClient || servicesToUpdate.length === 0) {
-        setLoadingMarketCaps(false);
         return;
       }
 
-      // Only set loading true if it's not already loading (to avoid flicker during polling)
-      setLoadingMarketCaps(currentLoading => currentLoading ? true : true);
+      // Filter to only services that don't already have market cap data
+      const servicesToFetch = servicesToUpdate.filter(service => 
+        service.bonding_curve_address && service.marketCap === undefined
+      );
+
+      if (servicesToFetch.length === 0) {
+        console.log("[ServiceList] All services already have market cap data, skipping fetch");
+        return;
+      }
+
       console.log(
         "[ServiceList] Starting to fetch/update market cap details for services:",
-        servicesToUpdate.map(s => s.id)
+        servicesToFetch.map(s => s.id)
       );
 
       // Record the time we started polling
       setLastPollingTime(Date.now());
 
       // Create a new array for updates to avoid mutating state directly during async operations
-      let newServiceData = [...servicesToUpdate];
+      let newServiceData = [...servicesToFetch];
 
       for (let i = 0; i < newServiceData.length; i += BATCH_SIZE) {
         const batch = newServiceData.slice(i, i + BATCH_SIZE);
@@ -158,7 +242,15 @@ export default function ServiceList({ initialServices, totalServices, initialLim
           newServiceData.slice(i, i + BATCH_SIZE).forEach(updatedServiceFromBatch => {
             const idx = updatedList.findIndex(s => s.id === updatedServiceFromBatch.id);
             if (idx !== -1) {
-              updatedList[idx] = { ...updatedList[idx], ...updatedServiceFromBatch };
+              // Merge the market cap data with existing service data
+              updatedList[idx] = { 
+                ...updatedList[idx], 
+                marketCap: updatedServiceFromBatch.marketCap,
+                tokenPriceInCordex: updatedServiceFromBatch.tokenPriceInCordex,
+                tokenTotalSupply: updatedServiceFromBatch.tokenTotalSupply,
+                actualProviderTokenAddress: updatedServiceFromBatch.actualProviderTokenAddress,
+                tokenDecimals: updatedServiceFromBatch.tokenDecimals
+              };
             }
           });
           return updatedList;
@@ -169,7 +261,6 @@ export default function ServiceList({ initialServices, totalServices, initialLim
           await new Promise((resolve) => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
         }
       }
-      setLoadingMarketCaps(false);
       console.log(
         "[ServiceList] All market cap data fetched and services updated."
       );
@@ -179,21 +270,27 @@ export default function ServiceList({ initialServices, totalServices, initialLim
 
   // Throttled version of the fetch function to prevent too many calls
   const throttledFetchMarketCaps = useMemo(
-    () => throttle(fetchMarketCapsForServiceList, 5000), // 5 second throttle
-    [fetchMarketCapsForServiceList]
+    () => throttle(fetchMarketCapsForServices, 5000), // 5 second throttle
+    [fetchMarketCapsForServices]
   );
 
-  // Effect for initial market cap fetch when component mounts or relevant services change
+  // Effect for initial market cap fetch - always fetch market cap data
   useEffect(() => {
     if (allLoadedServices.length > 0 && publicClient) {
-      // Fetch market caps for all currently loaded services
-      throttledFetchMarketCaps(allLoadedServices);
-    } else if (allLoadedServices.length === 0) {
-      setLoadingMarketCaps(false);
+      // Always fetch market caps for services that don't already have them
+      const servicesNeedingMarketCap = allLoadedServices.filter(service => 
+        service.bonding_curve_address && service.marketCap === undefined
+      );
+      
+      if (servicesNeedingMarketCap.length > 0) {
+        console.log(`[ServiceList] Fetching market caps for ${servicesNeedingMarketCap.length} services (always show market cap)`);
+        setLoadingMarketCaps(true);
+        fetchMarketCapsForServices(servicesNeedingMarketCap).finally(() => setLoadingMarketCaps(false));
+      }
     }
-  }, [allLoadedServices, publicClient, throttledFetchMarketCaps]);
+  }, [allLoadedServices, publicClient, fetchMarketCapsForServices]);
 
-  // Effect for polling market cap data - only poll if enough time has passed
+  // Effect for polling market cap data - only poll if we have services with existing data
   useEffect(() => {
     if (!publicClient) return;
 
@@ -201,10 +298,25 @@ export default function ServiceList({ initialServices, totalServices, initialLim
       const now = Date.now();
       const timeSinceLastPoll = now - lastPollingTime;
 
-      // Only poll if we haven't polled recently and we have services to update
+      // Only poll if we haven't polled recently and we have services with existing market cap data to update
       if (timeSinceLastPoll >= MARKET_CAP_POLL_INTERVAL && allLoadedServices.length > 0) {
-        console.log("[ServiceList] Polling for market cap updates...");
-        throttledFetchMarketCaps(allLoadedServices);
+        const servicesWithMarketCap = allLoadedServices.filter(service => 
+          service.bonding_curve_address && service.marketCap !== undefined
+        );
+        
+        if (servicesWithMarketCap.length > 0) {
+          console.log(`[ServiceList] Polling for market cap updates for ${servicesWithMarketCap.length} services...`);
+          // For polling, we temporarily allow re-fetching by setting marketCap to undefined
+          const servicesToRefresh = servicesWithMarketCap.map(service => ({
+            ...service,
+            marketCap: undefined,
+            tokenPriceInCordex: undefined,
+            tokenTotalSupply: undefined,
+            actualProviderTokenAddress: undefined,
+            tokenDecimals: undefined
+          }));
+          throttledFetchMarketCaps(servicesToRefresh);
+        }
       }
     }, MARKET_CAP_POLL_INTERVAL);
 
@@ -220,13 +332,14 @@ export default function ServiceList({ initialServices, totalServices, initialLim
       // We need getServicesByOwnerOrAll here
       // It's better to import it directly rather than passing as prop
       const { getServicesByOwnerOrAll } = await import("@/services/servicesService");
-      const nextPageData = await getServicesByOwnerOrAll(undefined, initialLimit, currentOffset);
+      const nextPageData = await getServicesByOwnerOrAll(undefined, initialLimit, currentOffset, searchQuery);
       
       setAllLoadedServices(prevServices => [...prevServices, ...nextPageData.services]);
       setCurrentOffset(prevOffset => prevOffset + nextPageData.services.length);
       
-      // Fetch market caps for the newly added services
+      // Always fetch market caps for the newly added services
       if (nextPageData.services.length > 0 && publicClient) {
+        console.log(`[ServiceList] Fetching market caps for ${nextPageData.services.length} newly loaded services`);
         throttledFetchMarketCaps(nextPageData.services); 
       }
 
@@ -248,7 +361,18 @@ export default function ServiceList({ initialServices, totalServices, initialLim
 
   return (
     <>
-      <Grid services={allLoadedServices} />
+      {/* Loading Market Cap Data Indicator */}
+      {loadingMarketCaps && (
+        <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+          <div className="flex items-center gap-2 text-blue-400">
+            <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+            <span className="text-sm">Fetching market cap data...</span>
+          </div>
+        </div>
+      )}
+
+      <Grid services={sortedServices} />
+      
       {currentOffset < totalServices && (
         <div className="mt-8 text-center">
           <button
